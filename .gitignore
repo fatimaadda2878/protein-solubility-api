@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Environnements virtuels
+.env
+.venv
+env/
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Données sensibles
+*.csv
+*.parquet
+*.pkl
+data/
+
+# Logs de production
+logs/
+
+# Modèle (trop lourd pour Git — utiliser Git LFS ou stocker séparément)
+model/*.joblib
+model/*.pkl
+model/*.onnx
+
+# MLflow
+mlruns/
+mlflow.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.dockerignore
+
+# Coverage
+.coverage
+htmlcov/
+coverage.xml
