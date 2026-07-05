@@ -14,15 +14,15 @@ jobs:
 
     steps:
       - name: Checkout du code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Setup Python 3.10
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
           python-version: "3.10"
 
       - name: Cache pip
-        uses: actions/cache@v4
+        uses: actions/cache@v3
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
@@ -49,7 +49,7 @@ jobs:
 
       - name: Exécution des tests avec couverture
         run: |
-          pytest tests/ -v --cov=app --cov-report=xml --cov-report=term-missing
+          pytest tests/ -v --cov=app --cov-report=xml --cov-report=term-missing -p no:warnings
 
       - name: Upload rapport de couverture
         uses: codecov/codecov-action@v4
