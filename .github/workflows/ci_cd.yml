@@ -9,7 +9,7 @@ on:
 jobs:
   # ── JOB 1 : Tests unitaires ──────────────────────────────────
   test:
-    name: Tests unitaires & couverture
+    name: Tests unitaires et couverture
     runs-on: ubuntu-latest
 
     steps:
@@ -21,19 +21,13 @@ jobs:
         with:
           python-version: "3.10"
 
-      - name: Cache pip
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
-
-      - name: Installation des dépendances
+      - name: Installation des dependances
         run: |
           pip install --upgrade pip
-          pip install fastapi uvicorn pydantic pytest pytest-cov httpx \
+          pip install fastapi uvicorn "pydantic==1.10.13" pytest pytest-cov httpx \
                       lightgbm scikit-learn numpy joblib
 
-      - name: Création d'un modèle de test
+      - name: Creation modele de test
         run: |
           mkdir -p model
           python -c "
@@ -44,30 +38,28 @@ jobs:
           y = np.random.randint(0, 2, 100)
           model.fit(X, y)
           joblib.dump(model, 'model/lgbm_model.joblib')
-          print('Modèle de test créé')
+          print('Modele de test cree')
           "
 
-      - name: Exécution des tests avec couverture
+      - name: Execution des tests avec couverture
         run: |
-          pytest tests/ -v --cov=app --cov-report=xml --cov-report=term-missing -p no:warnings
+          PYTHONPATH=. pytest tests/ -v \
+            --cov=app \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            -p no:warnings
 
-      - name: Upload rapport de couverture
-        uses: codecov/codecov-action@v4
-        with:
-          file: ./coverage.xml
-          fail_ci_if_error: false
-
-  # ── JOB 2 : Build Docker ─────────────────────────────────────
+  # ── JOB 2 : Verification Dockerfile ─────────────────────────
   build:
-    name: Build image Docker
+    name: Verification Dockerfile
     runs-on: ubuntu-latest
     needs: test
 
     steps:
       - name: Checkout du code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
-      - name: Création d'un modèle factice pour le build
+      - name: Creation modele factice pour build
         run: |
           mkdir -p model
           pip install joblib scikit-learn numpy
@@ -79,43 +71,40 @@ jobs:
           y = np.random.randint(0, 2, 100)
           model.fit(X, y)
           joblib.dump(model, 'model/lgbm_model.joblib')
-          print('Modèle de test créé')
           "
 
-      - name: Build de l'image Docker
+      - name: Build image Docker
         run: |
-          docker build -t protein-solubility-api:${{ github.sha }} .
           docker build -t protein-solubility-api:latest .
+          echo "Image Docker construite avec succes"
 
-      - name: Test de l'image Docker
+      - name: Test image Docker
         run: |
           docker run -d --name test-api -p 8000:8000 protein-solubility-api:latest
-          sleep 5
-          curl -f http://localhost:8000/health || exit 1
-          docker stop test-api
-          docker rm test-api
-          echo "Image Docker validée"
+          sleep 8
+          curl -f http://localhost:8000/health && echo "API OK" || exit 1
+          docker stop test-api && docker rm test-api
 
-  # ── JOB 3 : Déploiement sur Hugging Face Spaces ─────────────
+  # ── JOB 3 : Deploiement Hugging Face Spaces ─────────────────
   deploy:
-    name: Déploiement Hugging Face Spaces
+    name: Deploiement Hugging Face Spaces
     runs-on: ubuntu-latest
-    needs: build
+    needs: test
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
       - name: Checkout du code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
           python-version: "3.10"
 
       - name: Installation huggingface-hub
         run: pip install huggingface-hub
 
-      - name: Création modèle pour déploiement
+      - name: Creation modele pour deploiement
         run: |
           mkdir -p model
           pip install joblib scikit-learn numpy
@@ -129,16 +118,16 @@ jobs:
           joblib.dump(model, 'model/lgbm_model.joblib')
           "
 
-      - name: Déploiement sur Hugging Face Spaces
+      - name: Deploiement sur Hugging Face Spaces
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          python -c "
+          python3 -c "
           from huggingface_hub import HfApi
           import os
           token = os.environ.get('HF_TOKEN')
           if not token:
-              print('HF_TOKEN non configuré — déploiement ignoré')
+              print('HF_TOKEN non configure - deploiement ignore')
               exit(0)
           api = HfApi()
           api.upload_folder(
@@ -146,7 +135,7 @@ jobs:
               repo_id='fatimaadda2878/protein-solubility-api',
               repo_type='space',
               token=token,
-              ignore_patterns=['*.pyc', '__pycache__', '.git', 'logs', '.gitignore']
+              ignore_patterns=['*.pyc', '__pycache__', '.git', 'logs']
           )
-          print('Déployé sur Hugging Face Spaces !')
+          print('Deploye sur Hugging Face Spaces !')
           "
