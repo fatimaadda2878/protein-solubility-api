@@ -96,7 +96,7 @@ class TestPredict:
         from app.model import predict
 
         mock_model = MagicMock()
-        mock_model.predict_proba.return_value = np.array([[0.95, 0.05]])
+        mock_model.predict_proba.return_value = np.array([[1.0, 0.0]])
 
         with patch("app.model._model", mock_model), \
              patch("app.model._scaler", None):
