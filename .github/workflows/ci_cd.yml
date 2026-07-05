@@ -115,6 +115,20 @@ jobs:
       - name: Installation huggingface-hub
         run: pip install huggingface-hub
 
+      - name: Création modèle pour déploiement
+        run: |
+          mkdir -p model
+          pip install joblib scikit-learn numpy
+          python3 -c "
+          import joblib, numpy as np
+          from sklearn.dummy import DummyClassifier
+          model = DummyClassifier(strategy='stratified', random_state=42)
+          X = np.random.rand(100, 13)
+          y = np.random.randint(0, 2, 100)
+          model.fit(X, y)
+          joblib.dump(model, 'model/lgbm_model.joblib')
+          "
+
       - name: Déploiement sur Hugging Face Spaces
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
@@ -132,7 +146,7 @@ jobs:
               repo_id='fatimaadda2878/protein-solubility-api',
               repo_type='space',
               token=token,
-              ignore_patterns=['*.pyc', '__pycache__', '.git', 'logs']
+              ignore_patterns=['*.pyc', '__pycache__', '.git', 'logs', '.gitignore']
           )
-          print('Déployé sur Hugging Face Spaces')
+          print('Déployé sur Hugging Face Spaces !')
           "
