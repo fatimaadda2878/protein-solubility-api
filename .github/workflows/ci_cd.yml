@@ -70,6 +70,7 @@ jobs:
       - name: Création d'un modèle factice pour le build
         run: |
           mkdir -p model
+          pip install joblib scikit-learn numpy
           python3 -c "
           import joblib, numpy as np
           from sklearn.dummy import DummyClassifier
@@ -78,6 +79,7 @@ jobs:
           y = np.random.randint(0, 2, 100)
           model.fit(X, y)
           joblib.dump(model, 'model/lgbm_model.joblib')
+          print('Modèle de test créé')
           "
 
       - name: Build de l'image Docker
