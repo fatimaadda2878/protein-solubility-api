@@ -138,8 +138,9 @@ Dans Settings → Secrets → Actions :
 
 - **Algorithme** : LightGBM (optimisé via Optuna, 50 trials)
 - **Dataset** : DeepSol — 71 419 protéines *E. coli* (Khurana et al. 2018)
-- **AUC** : 0.759 sur le jeu de test
-- **Seuil de décision** : 0.05 (optimisé selon coût métier : FN = 1 200€, FP = 200€)
+- **AUC Validation** : 0.6291 sur le jeu de test
+- **AUC de test Indépendante** : 0.5952
+- **Seuil de décision** : 0.3 (optimisé selon coût métier : FN = 1 200€, FP = 200€)
 - **Tracking** : MLflow (experiment `protein-solubility-ecoli`)
 
 ## Auteur
