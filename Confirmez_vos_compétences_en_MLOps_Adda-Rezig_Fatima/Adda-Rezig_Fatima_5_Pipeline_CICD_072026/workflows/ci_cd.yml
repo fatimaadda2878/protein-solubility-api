@@ -1,0 +1,141 @@
+name: CI/CD — Protein Solubility API
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── JOB 1 : Tests unitaires ──────────────────────────────────
+  test:
+    name: Tests unitaires et couverture
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v3
+
+      - name: Setup Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Installation des dependances
+        run: |
+          pip install --upgrade pip
+          pip install fastapi uvicorn "pydantic==1.10.13" pytest pytest-cov httpx \
+                      lightgbm scikit-learn numpy joblib
+
+      - name: Creation modele de test
+        run: |
+          mkdir -p model
+          python -c "
+          import joblib, numpy as np
+          from sklearn.dummy import DummyClassifier
+          model = DummyClassifier(strategy='stratified', random_state=42)
+          X = np.random.rand(100, 13)
+          y = np.random.randint(0, 2, 100)
+          model.fit(X, y)
+          joblib.dump(model, 'model/lgbm_model.joblib')
+          print('Modele de test cree')
+          "
+
+      - name: Execution des tests avec couverture
+        run: |
+          PYTHONPATH=. pytest tests/ -v \
+            --cov=app \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            -p no:warnings
+
+  # ── JOB 2 : Verification Dockerfile ─────────────────────────
+  build:
+    name: Verification Dockerfile
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v3
+
+      - name: Creation modele factice pour build
+        run: |
+          mkdir -p model
+          pip install joblib scikit-learn numpy
+          python3 -c "
+          import joblib, numpy as np
+          from sklearn.dummy import DummyClassifier
+          model = DummyClassifier(strategy='stratified', random_state=42)
+          X = np.random.rand(100, 13)
+          y = np.random.randint(0, 2, 100)
+          model.fit(X, y)
+          joblib.dump(model, 'model/lgbm_model.joblib')
+          "
+
+      - name: Build image Docker
+        run: |
+          docker build -t protein-solubility-api:latest .
+          echo "Image Docker construite avec succes"
+
+      - name: Test image Docker
+        run: |
+          docker run -d --name test-api -p 8000:8000 protein-solubility-api:latest
+          sleep 8
+          curl -f http://localhost:8000/health && echo "API OK" || exit 1
+          docker stop test-api && docker rm test-api
+
+  # ── JOB 3 : Deploiement Hugging Face Spaces ─────────────────
+  deploy:
+    name: Deploiement Hugging Face Spaces
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Installation huggingface-hub
+        run: pip install huggingface-hub
+
+      - name: Creation modele pour deploiement
+        run: |
+          mkdir -p model
+          pip install joblib scikit-learn numpy
+          python3 -c "
+          import joblib, numpy as np
+          from sklearn.dummy import DummyClassifier
+          model = DummyClassifier(strategy='stratified', random_state=42)
+          X = np.random.rand(100, 13)
+          y = np.random.randint(0, 2, 100)
+          model.fit(X, y)
+          joblib.dump(model, 'model/lgbm_model.joblib')
+          "
+
+      - name: Deploiement sur Hugging Face Spaces
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python3 -c "
+          from huggingface_hub import HfApi
+          import os
+          token = os.environ.get('HF_TOKEN')
+          if not token:
+              print('HF_TOKEN non configure - deploiement ignore')
+              exit(0)
+          api = HfApi()
+          api.upload_folder(
+              folder_path='.',
+              repo_id='fatimaadda2878/protein-solubility-api',
+              repo_type='space',
+              token=token,
+              ignore_patterns=['*.pyc', '__pycache__', '.git', 'logs']
+          )
+          print('Deploye sur Hugging Face Spaces !')
+          "

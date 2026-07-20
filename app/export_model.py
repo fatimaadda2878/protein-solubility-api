@@ -1,65 +1,31 @@
-"""
-Script d'export du modèle depuis MLflow vers joblib
-A exécuter une fois pour préparer le modèle pour l'API.
-
-Usage :
-    python app/export_model.py
-"""
-
-import mlflow
-import joblib
+"""Export d'un modèle MLflow vers model/lgbm_model.joblib."""
+import json
 import os
 from pathlib import Path
+import joblib
+import mlflow
 
-# ── Configuration ─────────────────────────────────────────────
-MLFLOW_DB   = r"C:\Users\adda-\mlflow.db"
-EXPERIMENT  = "protein-solubility-ecoli"
-MODEL_DIR   = Path("model")
-MODEL_DIR.mkdir(exist_ok=True)
+EXPERIMENT_NAME = os.getenv("MLFLOW_EXPERIMENT_NAME", "protein-solubility-ecoli")
+TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "sqlite:///mlflow.db")
+MODEL_DIR = Path(os.getenv("MODEL_DIR", "model"))
 
-def export_best_model():
-    """J'exporte le meilleur modèle MLflow vers un fichier joblib."""
-
-    mlflow.set_tracking_uri(f"sqlite:///{MLFLOW_DB}")
+def export_best_model() -> None:
+    mlflow.set_tracking_uri(TRACKING_URI)
     client = mlflow.tracking.MlflowClient()
-
-    experiment = client.get_experiment_by_name(EXPERIMENT)
+    experiment = client.get_experiment_by_name(EXPERIMENT_NAME)
     if experiment is None:
-        raise ValueError(f"Experiment '{EXPERIMENT}' introuvable dans MLflow")
-
-    # Je cherche le meilleur run (AUC le plus élevé)
-    runs = client.search_runs(
-        experiment_ids=[experiment.experiment_id],
-        filter_string="metrics.test_auc > 0",
-        order_by=["metrics.test_auc DESC"],
-        max_results=1
-    )
-
+        raise RuntimeError(f"Expérience MLflow introuvable : {EXPERIMENT_NAME}")
+    runs = client.search_runs(experiment_ids=[experiment.experiment_id], filter_string="metrics.test_auc > 0", order_by=["metrics.test_auc DESC"], max_results=1)
     if not runs:
-        raise ValueError("Aucun run avec test_auc trouvé")
-
-    best_run = runs[0]
-    print(f"Meilleur run : {best_run.info.run_id}")
-    print(f"AUC : {best_run.data.metrics.get('test_auc', 'N/A')}")
-
-    # Chargement du modèle depuis MLflow
-    model_uri = f"runs:/{best_run.info.run_id}/model"
-    model = mlflow.lightgbm.load_model(model_uri)
-
-    # Sauvegarde en joblib
+        raise RuntimeError("Aucun run contenant la métrique test_auc.")
+    run = runs[0]
+    model = mlflow.lightgbm.load_model(f"runs:/{run.info.run_id}/model")
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, MODEL_DIR / "lgbm_model.joblib")
-    print(f"Modèle sauvegardé : {MODEL_DIR / 'lgbm_model.joblib'}")
-
-    # Sauvegarde des métadonnées
-    meta = {
-        "run_id":   best_run.info.run_id,
-        "auc":      best_run.data.metrics.get("test_auc"),
-        "threshold":best_run.data.metrics.get("seuil_decision", 0.05),
-    }
-    import json
-    with open(MODEL_DIR / "model_meta.json", "w") as f:
-        json.dump(meta, f, indent=2)
-    print(f"Métadonnées sauvegardées : {MODEL_DIR / 'model_meta.json'}")
+    metadata = {"run_id": run.info.run_id, "auc_validation": run.data.metrics.get("validation_auc"), "auc_test": run.data.metrics.get("test_auc"), "threshold": run.data.metrics.get("threshold", 0.30), "selection_rule": "threshold selected on validation set", "evaluation_rule": "final AUC measured once on an independent test set"}
+    with (MODEL_DIR / "model_meta.json").open("w", encoding="utf-8") as file:
+        json.dump(metadata, file, indent=2, ensure_ascii=False)
+    print(f"Modèle exporté vers {MODEL_DIR / 'lgbm_model.joblib'}")
 
 if __name__ == "__main__":
     export_best_model()

@@ -1,40 +1,34 @@
-# ── Image de base Python légère ──────────────────────────────
 FROM python:3.10-slim
 
-# ── Métadonnées ───────────────────────────────────────────────
 LABEL maintainer="Fatima Adda-Rezig"
-LABEL description="API FastAPI - Prédiction Solubilité Protéines Recombinantes"
-LABEL version="1.0.0"
+LABEL description="API FastAPI de prédiction de solubilité des protéines"
 
-# ── Variables d'environnement ─────────────────────────────────
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV MODEL_PATH=model/lgbm_model.joblib
-ENV SCALER_PATH=model/scaler.joblib
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    MODEL_PATH=/app/model/lgbm_model.joblib \
+    MODEL_META_PATH=/app/model/model_meta.json
 
-# ── Répertoire de travail ─────────────────────────────────────
 WORKDIR /app
 
-# ── Installation des dépendances système ─────────────────────
-RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# ── Copie et installation des dépendances Python ─────────────
 COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
 
-# ── Copie du code source ──────────────────────────────────────
 COPY app/ ./app/
 COPY model/ ./model/
 
-# ── Création du dossier logs ──────────────────────────────────
-RUN mkdir -p logs
+RUN test -f /app/model/lgbm_model.joblib \
+    || (echo "ERREUR: vrai modèle absent. Lancez python retrain_model.py." && exit 1)
 
-# ── Exposition du port ────────────────────────────────────────
-EXPOSE 8000
+RUN mkdir -p /app/logs
 
-# ── Commande de démarrage ─────────────────────────────────────
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+EXPOSE 7860
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl --fail http://localhost:7860/health || exit 1
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860", "--workers", "1"]

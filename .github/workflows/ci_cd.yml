@@ -1,0 +1,148 @@
+name: CI/CD — Protein Solubility API
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Tests unitaires
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+
+      - name: Installer les dépendances
+        run: |
+          python -m pip install --upgrade pip
+          pip install fastapi uvicorn "pydantic==1.10.13" pytest pytest-cov \
+                      httpx lightgbm scikit-learn numpy joblib
+
+      - name: Créer un artefact réservé aux tests
+        run: |
+          mkdir -p tests/artifacts
+          python - <<'PY'
+          import json
+          import joblib
+          import numpy as np
+          from sklearn.dummy import DummyClassifier
+
+          rng = np.random.default_rng(42)
+          x = rng.random((100, 13))
+          y = np.array([0, 1] * 50)
+
+          model = DummyClassifier(strategy="prior")
+          model.fit(x, y)
+          joblib.dump(model, "tests/artifacts/test_model.joblib")
+
+          metadata = {
+              "run_id": "test-only",
+              "features": [
+                  "pI", "log_mw", "gravy_norm", "log_instability",
+                  "aromaticity", "pct_helix", "pct_turn", "pct_sheet",
+                  "pI_distance", "pct_coil", "helix_x_gravy",
+                  "stability_score", "helix_sheet_ratio"
+              ],
+              "threshold": 0.5,
+              "test_metrics": {"roc_auc": None},
+          }
+          with open("tests/artifacts/test_model_meta.json", "w") as file:
+              json.dump(metadata, file)
+          PY
+
+      - name: Exécuter les tests
+        env:
+          MODEL_PATH: tests/artifacts/test_model.joblib
+          MODEL_META_PATH: tests/artifacts/test_model_meta.json
+        run: PYTHONPATH=. pytest tests/ -v --cov=app --cov-report=term-missing
+
+  build:
+    name: Construire et tester l'image réelle
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Vérifier le vrai modèle
+        run: |
+          test -f model/lgbm_model.joblib || {
+            echo "ERREUR : model/lgbm_model.joblib est absent."
+            exit 1
+          }
+          test -f model/model_meta.json || {
+            echo "ERREUR : model/model_meta.json est absent."
+            exit 1
+          }
+
+      - name: Construire l'image Docker
+        run: docker build -t protein-solubility-api:latest .
+
+      - name: Tester health, docs et predict
+        run: |
+          docker run -d --name protein-api -p 8000:8000 protein-solubility-api:latest
+          trap "docker rm -f protein-api" EXIT
+
+          for i in {1..20}; do
+            curl -fsS http://localhost:8000/health && break
+            sleep 2
+          done
+
+          curl -fsS http://localhost:8000/docs > /dev/null
+          curl -fsS -X POST http://localhost:8000/predict \
+            -H "Content-Type: application/json" \
+            -d '{
+              "pI": 6.2,
+              "log_mw": 10.5,
+              "gravy_norm": 0.21,
+              "log_instability": 0.5,
+              "aromaticity": 0.08,
+              "pct_helix": 0.38,
+              "pct_turn": 0.30,
+              "pct_sheet": 0.18
+            }' > /dev/null
+
+  deploy:
+    name: Déployer sur Hugging Face
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Installer huggingface-hub
+        run: pip install huggingface-hub
+
+      - name: Déployer le vrai modèle
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE_ID: ${{ vars.HF_SPACE_ID }}
+        run: |
+          test -n "$HF_TOKEN" || { echo "HF_TOKEN absent"; exit 1; }
+          test -n "$HF_SPACE_ID" || { echo "HF_SPACE_ID absent"; exit 1; }
+          test -f model/lgbm_model.joblib || exit 1
+
+          python - <<'PY'
+          import os
+          from huggingface_hub import HfApi
+
+          HfApi().upload_folder(
+              folder_path=".",
+              repo_id=os.environ["HF_SPACE_ID"],
+              repo_type="space",
+              token=os.environ["HF_TOKEN"],
+              ignore_patterns=[
+                  ".git/*", "__pycache__/*", "*.pyc",
+                  ".venv/*", "logs/*", "tests/artifacts/*"
+              ],
+          )
+          PY
