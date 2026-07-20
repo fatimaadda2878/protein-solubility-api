@@ -10,6 +10,7 @@ on:
   workflow_dispatch:
 
 jobs:
+  # ── JOB 1 : Tests unitaires ──────────────────────────────────
   tests:
     name: Tests unitaires
     runs-on: ubuntu-latest
@@ -27,53 +28,80 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
-          python -c "import pydantic; print('Pydantic:', pydantic.__version__)"
-          python -c "from pydantic import model_validator; print('model_validator OK')"
 
-      - name: Exécuter les tests
+      - name: Créer le modèle factice pour les tests
         run: |
-          python -m pytest tests -v
+          mkdir -p model tests/artifacts
+          python -c "
+          import joblib, numpy as np, json
+          from sklearn.dummy import DummyClassifier
+          model = DummyClassifier(strategy='stratified', random_state=42)
+          model.fit(np.random.rand(100, 13), np.random.randint(0, 2, 100))
+          joblib.dump(model, 'model/lgbm_model.joblib')
+          joblib.dump(model, 'tests/artifacts/test_model.joblib')
+          json.dump({'auc': 0.7443, 'threshold': 0.35}, open('model/model_meta.json', 'w'))
+          json.dump({'auc': 0.7443, 'threshold': 0.35}, open('tests/artifacts/test_model_meta.json', 'w'))
+          print('Modele de test cree')
+          "
 
-      - name: Exécuter les tests
+      - name: Exécuter les tests avec couverture
         env:
-          MODEL_PATH: tests/artifacts/test_model.joblib
-          MODEL_META_PATH: tests/artifacts/test_model_meta.json
-        run: PYTHONPATH=. pytest tests/ -v --cov=app --cov-report=term-missing
+          MODEL_PATH: model/lgbm_model.joblib
+          MODEL_META_PATH: model/model_meta.json
+        run: |
+          PYTHONPATH=. pytest tests/ -v --cov=app --cov-report=term-missing -p no:warnings
 
+  # ── JOB 2 : Build Docker avec le vrai modèle ─────────────────
   build:
-    name: Construire et tester l'image réelle
+    name: Construire et tester l'image Docker
     needs: tests
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
         with:
           lfs: true
 
-      - name: Vérifier le vrai modèle
+      - name: Vérifier la présence du vrai modèle
         run: |
-          test -f model/lgbm_model.joblib || {
-            echo "ERREUR : model/lgbm_model.joblib est absent."
+          if [ ! -f model/lgbm_model.joblib ]; then
+            echo "ERREUR : model/lgbm_model.joblib absent du dépôt."
+            echo "Ajoutez le modèle via Git LFS ou commitez-le directement."
             exit 1
-          }
-          test -f model/model_meta.json || {
-            echo "ERREUR : model/model_meta.json est absent."
+          fi
+          if [ ! -f model/model_meta.json ]; then
+            echo "ERREUR : model/model_meta.json absent du dépôt."
             exit 1
-          }
+          fi
+          echo "OK - Modèle trouvé"
+          ls -lh model/
 
       - name: Construire l'image Docker
         run: docker build -t protein-solubility-api:latest .
 
-      - name: Tester health, docs et predict
+      - name: Tester l'image Docker
         run: |
           docker run -d --name protein-api -p 8000:8000 protein-solubility-api:latest
           trap "docker rm -f protein-api" EXIT
 
+          echo "Attente du démarrage de l'API..."
           for i in {1..20}; do
-            curl -fsS http://localhost:8000/health && break
-            sleep 2
+            if curl -fsS http://localhost:8000/health; then
+              echo "API démarrée"
+              break
+            fi
+            echo "Tentative $i/20..."
+            sleep 3
           done
 
+          echo "Test /health"
+          curl -fsS http://localhost:8000/health
+
+          echo "Test /docs"
           curl -fsS http://localhost:8000/docs > /dev/null
+
+          echo "Test /predict"
           curl -fsS -X POST http://localhost:8000/predict \
             -H "Content-Type: application/json" \
             -d '{
@@ -85,42 +113,59 @@ jobs:
               "pct_helix": 0.38,
               "pct_turn": 0.30,
               "pct_sheet": 0.18
-            }' > /dev/null
+            }'
+          echo "Tous les endpoints OK"
 
+  # ── JOB 3 : Déploiement Hugging Face ─────────────────────────
   deploy:
     name: Déployer sur Hugging Face
     needs: build
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
         with:
           lfs: true
 
       - name: Installer huggingface-hub
         run: pip install huggingface-hub
 
-      - name: Déployer le vrai modèle
+      - name: Vérifier les secrets
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HF_SPACE_ID: ${{ vars.HF_SPACE_ID }}
         run: |
-          test -n "$HF_TOKEN" || { echo "HF_TOKEN absent"; exit 1; }
+          test -n "$HF_TOKEN"    || { echo "HF_TOKEN absent"; exit 1; }
           test -n "$HF_SPACE_ID" || { echo "HF_SPACE_ID absent"; exit 1; }
-          test -f model/lgbm_model.joblib || exit 1
+          test -f model/lgbm_model.joblib || { echo "Modèle absent"; exit 1; }
+          echo "OK - Secrets et modèle présents"
 
+      - name: Déployer sur Hugging Face Spaces
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE_ID: ${{ vars.HF_SPACE_ID }}
+        run: |
           python - <<'PY'
           import os
           from huggingface_hub import HfApi
 
-          HfApi().upload_folder(
+          api = HfApi()
+          api.upload_folder(
               folder_path=".",
               repo_id=os.environ["HF_SPACE_ID"],
               repo_type="space",
               token=os.environ["HF_TOKEN"],
               ignore_patterns=[
-                  ".git/*", "__pycache__/*", "*.pyc",
-                  ".venv/*", "logs/*", "tests/artifacts/*"
+                  ".git/*",
+                  "__pycache__/*",
+                  "*.pyc",
+                  ".venv/*",
+                  "logs/*",
+                  "tests/artifacts/*",
+                  "*.ipynb",
               ],
           )
+          print("Déploiement terminé sur", os.environ["HF_SPACE_ID"])
           PY

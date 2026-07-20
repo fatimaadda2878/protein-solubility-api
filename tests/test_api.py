@@ -1,22 +1,32 @@
 """
-Tests unitaires — API FastAPI Protein Solubility (version enrichie)
+Tests unitaires — API FastAPI Protein Solubility
 """
 
 import pytest
-from fastapi.testclient import TestClient
-from unittest.mock import patch, MagicMock
 import numpy as np
+from unittest.mock import patch, MagicMock
+
+
+# ── Mock global du modèle avant tout import de l'app ─────────
+mock_model = MagicMock()
+mock_model.predict_proba.return_value = np.array([[0.3, 0.7]])
+
+# On patche AVANT d'importer l'app pour éviter le FileNotFoundError
+with patch("app.model._model", mock_model), \
+     patch("app.model._scaler", None):
+    from app.main import app
+
+from fastapi.testclient import TestClient
 
 
 @pytest.fixture
 def client():
-    mock_model = MagicMock()
-    mock_model.predict_proba.return_value = np.array([[0.3, 0.7]])
+    """Client de test avec modèle mocké."""
     with patch("app.model._model", mock_model), \
          patch("app.model._scaler", None), \
+         patch("app.model.load_model", return_value=mock_model), \
          patch("app.main.load_model", return_value=mock_model):
-        from app.main import app
-        return TestClient(app)
+        yield TestClient(app)
 
 
 VALID_PROTEIN = {
@@ -51,8 +61,8 @@ class TestPredictionValid:
 
     def test_all_fields_present(self, client):
         data = client.post("/predict", json=VALID_PROTEIN).json()
-        for field in ["soluble","probability_soluble","probability_insoluble",
-                      "confidence","inference_time_s","recommendation"]:
+        for field in ["soluble", "probability_soluble", "probability_insoluble",
+                      "confidence", "inference_time_s", "recommendation"]:
             assert field in data
 
     def test_prediction_is_binary(self, client):
@@ -166,15 +176,19 @@ class TestIncorrectTypes:
 
 class TestEdgeCases:
     def test_minimum_valid_values(self, client):
-        data = {"pI": 2.5, "log_mw": 7.0, "gravy_norm": 0.0,
-                "log_instability": -4.0, "aromaticity": 0.0,
-                "pct_helix": 0.0, "pct_turn": 0.0, "pct_sheet": 0.0}
+        data = {
+            "pI": 2.5, "log_mw": 7.0, "gravy_norm": 0.0,
+            "log_instability": -4.0, "aromaticity": 0.0,
+            "pct_helix": 0.0, "pct_turn": 0.0, "pct_sheet": 0.0
+        }
         assert client.post("/predict", json=data).status_code == 200
 
     def test_maximum_valid_values(self, client):
-        data = {"pI": 12.0, "log_mw": 13.0, "gravy_norm": 1.0,
-                "log_instability": 2.0, "aromaticity": 0.3,
-                "pct_helix": 0.33, "pct_turn": 0.33, "pct_sheet": 0.33}
+        data = {
+            "pI": 12.0, "log_mw": 13.0, "gravy_norm": 1.0,
+            "log_instability": 2.0, "aromaticity": 0.3,
+            "pct_helix": 0.33, "pct_turn": 0.33, "pct_sheet": 0.33
+        }
         assert client.post("/predict", json=data).status_code == 200
 
     def test_pi_exactly_neutral(self, client):
