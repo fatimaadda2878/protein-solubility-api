@@ -1,152 +1,286 @@
 """
-API FastAPI — Prédiction de la Solubilité des Protéines Recombinantes
-Entreprise : Prêt à Dépenser (adapté pour protéines)
-Auteur : Fatima Adda-Rezig
+API FastAPI de prédiction de la solubilité des protéines recombinantes.
 """
+
+from __future__ import annotations
+
+import json
+import logging
+import time
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from app.schemas import ProteinInput, PredictionOutput
-from app.model import load_model, predict
-import time
-import logging
-import json
-import os
-from datetime import datetime
-from pathlib import Path
 
-# ── Logging structuré (JSON) ──────────────────────────────────
+from app.model import (
+    get_model_metadata,
+    is_model_loaded,
+    load_model,
+    predict,
+)
+from app.schemas import PredictionOutput, ProteinInput
+
+
+API_VERSION = "1.0.0"
+LOG_DIR = Path("logs")
+LOG_FILE = LOG_DIR / "predictions.jsonl"
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ── Dossier logs ─────────────────────────────────────────────
-LOG_DIR = Path("logs")
-LOG_DIR.mkdir(exist_ok=True)
 
-# ── Initialisation de l'application ──────────────────────────
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    """Charge le modèle au démarrage sans empêcher l'API de démarrer."""
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+    try:
+        logger.info("Chargement du modèle LightGBM...")
+        load_model()
+        logger.info("Modèle chargé avec succès.")
+    except Exception as exc:
+        logger.exception(
+            "Le modèle n'a pas pu être chargé au démarrage : %s",
+            exc,
+        )
+
+    yield
+
+
 app = FastAPI(
     title="Protein Solubility Prediction API",
     description=(
-        "API de prédiction de la solubilité des protéines recombinantes "
-        "lors de l'expression dans E. coli. "
-        "Retourne la probabilité qu'une protéine soit soluble (1) "
-        "ou forme des corps d'inclusion (0)."
+        "Prédiction de la solubilité des protéines recombinantes "
+        "lors de leur expression dans E. coli."
     ),
-    version="1.0.0",
+    version=API_VERSION,
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ── Chargement du modèle au démarrage (une seule fois) ────────
-@app.on_event("startup")
-async def startup_event():
-    """Je charge le modèle une seule fois au démarrage de l'API."""
-    logger.info("Chargement du modèle LightGBM...")
-    load_model()
-    logger.info("Modèle chargé avec succès.")
+
+def _utc_timestamp() -> str:
+    """Retourne un horodatage UTC au format ISO 8601."""
+    return datetime.now(timezone.utc).isoformat()
 
 
-# ── Endpoints ────────────────────────────────────────────────
+def _input_to_dict(protein: ProteinInput) -> Dict[str, Any]:
+    """Compatibilité Pydantic v1 et v2."""
+    if hasattr(protein, "model_dump"):
+        return protein.model_dump()
+    return protein.dict()
+
+
+def _append_prediction_log(entry: Dict[str, Any]) -> None:
+    """Ajoute une prédiction au fichier JSON Lines."""
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+    with LOG_FILE.open("a", encoding="utf-8") as file:
+        file.write(
+            json.dumps(entry, ensure_ascii=False) + "\n"
+        )
+
+
 @app.get("/", tags=["Health"])
-def root():
-    """Endpoint racine — vérification que l'API est en ligne."""
+def root() -> Dict[str, str]:
+    """Informations générales sur l'API."""
     return {
         "message": "Protein Solubility Prediction API",
-        "version": "1.0.0",
+        "version": API_VERSION,
         "status": "online",
-        "docs": "/docs"
+        "docs": "/docs",
     }
 
 
 @app.get("/health", tags=["Health"])
-def health_check():
-    """Endpoint de santé — vérifie que le modèle est chargé."""
-    return {
-        "status": "healthy",
-        "model_loaded": True,
-        "timestamp": datetime.utcnow().isoformat()
-    }
+def health_check() -> Dict[str, Any]:
+    """Vérifie que l'API peut accéder au modèle."""
+    try:
+        if not is_model_loaded():
+            load_model()
+
+        return {
+            "status": "healthy",
+            "model_loaded": True,
+            "timestamp": _utc_timestamp(),
+            "version": API_VERSION,
+            "model_metadata": get_model_metadata(),
+        }
+
+    except Exception as exc:
+        logger.exception("Échec du contrôle de santé : %s", exc)
+
+        return {
+            "status": "unhealthy",
+            "model_loaded": False,
+            "timestamp": _utc_timestamp(),
+            "version": API_VERSION,
+            "error": str(exc),
+        }
 
 
-@app.post("/predict", response_model=PredictionOutput, tags=["Prediction"])
-def predict_solubility(protein: ProteinInput):
-    """
-    Prédit la probabilité de solubilité d'une protéine recombinante.
-
-    - **pI** : Point isoélectrique (2.5 – 12.0)
-    - **log_mw** : log(Masse moléculaire en Da) (7.0 – 13.0)
-    - **gravy_norm** : Score GRAVY normalisé (0.0 – 1.0)
-    - **log_instability** : log(Indice d'instabilité) (-4.0 – 2.0)
-    - **aromaticity** : Aromaticité (0.0 – 0.3)
-    - **pct_helix** : % hélice alpha (0.0 – 1.0)
-    - **pct_turn** : % turn (0.0 – 1.0)
-    - **pct_sheet** : % feuillet beta (0.0 – 1.0)
-    """
-    start_time = time.time()
+@app.post(
+    "/predict",
+    response_model=PredictionOutput,
+    tags=["Prediction"],
+)
+def predict_solubility(protein: ProteinInput) -> PredictionOutput:
+    """Prédit la probabilité de solubilité d'une protéine."""
+    start_time = time.perf_counter()
 
     try:
         result = predict(protein)
-        inference_time = round(time.time() - start_time, 4)
 
-        # Log structuré JSON
+        inference_time = max(
+            time.perf_counter() - start_time,
+            1e-6,
+        )
+
         log_entry = {
-            "timestamp": datetime.utcnow().isoformat(),
-            "input": protein.dict(),
+            "timestamp": _utc_timestamp(),
+            "input": _input_to_dict(protein),
             "prediction": result["soluble"],
             "probability": result["probability_soluble"],
             "inference_time_s": inference_time,
+            "data_source": "real_api_request",
         }
-        with open(LOG_DIR / "predictions.jsonl", "a") as f:
-            f.write(json.dumps(log_entry) + "\n")
 
-        logger.info(f"Prediction: {result['soluble']} | P={result['probability_soluble']:.4f} | t={inference_time}s")
+        try:
+            _append_prediction_log(log_entry)
+        except OSError as log_error:
+            logger.warning(
+                "La prédiction a réussi, mais son journal n'a pas "
+                "pu être écrit : %s",
+                log_error,
+            )
+
+        logger.info(
+            "Prediction=%s | P_soluble=%.4f | temps=%.6fs",
+            result["soluble"],
+            result["probability_soluble"],
+            inference_time,
+        )
 
         return PredictionOutput(
             soluble=result["soluble"],
             probability_soluble=result["probability_soluble"],
             probability_insoluble=result["probability_insoluble"],
             confidence=result["confidence"],
-            inference_time_s=inference_time,
+            inference_time_s=round(inference_time, 6),
             recommendation=result["recommendation"],
         )
 
-    except Exception as e:
-        logger.error(f"Erreur de prédiction : {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Erreur de prédiction : %s", exc)
+        raise HTTPException(
+            status_code=500,
+            detail="Erreur interne pendant la prédiction.",
+        ) from exc
 
 
 @app.get("/logs/summary", tags=["Monitoring"])
-def logs_summary():
-    """Retourne un résumé des prédictions loggées."""
-    log_file = LOG_DIR / "predictions.jsonl"
-    if not log_file.exists():
-        return {"message": "Aucun log disponible", "n_predictions": 0}
+def logs_summary() -> Dict[str, Any]:
+    """Retourne un résumé des véritables requêtes enregistrées par l'API."""
+    if not LOG_FILE.exists():
+        return {
+            "n_predictions": 0,
+            "message": "Aucun log de prédiction disponible.",
+            "data_source": "real_api_logs",
+        }
 
     entries = []
-    with open(log_file) as f:
-        for line in f:
-            entries.append(json.loads(line))
 
-    n = len(entries)
-    if n == 0:
-        return {"n_predictions": 0}
+    try:
+        with LOG_FILE.open("r", encoding="utf-8") as file:
+            for line in file:
+                line = line.strip()
+                if not line:
+                    continue
 
-    n_soluble   = sum(1 for e in entries if e["prediction"] == 1)
-    avg_proba   = sum(e["probability"] for e in entries) / n
-    avg_latency = sum(e["inference_time_s"] for e in entries) / n
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    logger.warning(
+                        "Une ligne de log invalide a été ignorée."
+                    )
+                    continue
+
+                if isinstance(entry, dict):
+                    entries.append(entry)
+
+    except OSError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Impossible de lire les logs : {exc}",
+        ) from exc
+
+    n_predictions = len(entries)
+
+    if n_predictions == 0:
+        return {
+            "n_predictions": 0,
+            "message": "Aucun log de prédiction valide.",
+            "data_source": "real_api_logs",
+        }
+
+    n_soluble = sum(
+        1
+        for entry in entries
+        if entry.get("prediction") == 1
+    )
+
+    probabilities = [
+        float(entry["probability"])
+        for entry in entries
+        if isinstance(entry.get("probability"), (int, float))
+    ]
+
+    latencies = [
+        float(entry["inference_time_s"])
+        for entry in entries
+        if isinstance(entry.get("inference_time_s"), (int, float))
+    ]
+
+    average_probability = (
+        sum(probabilities) / len(probabilities)
+        if probabilities
+        else 0.0
+    )
+    average_latency = (
+        sum(latencies) / len(latencies)
+        if latencies
+        else 0.0
+    )
 
     return {
-        "n_predictions":   n,
-        "n_soluble":       n_soluble,
-        "n_insoluble":     n - n_soluble,
-        "pct_soluble":     round(n_soluble / n * 100, 1),
-        "avg_probability": round(avg_proba, 4),
-        "avg_latency_s":   round(avg_latency, 4),
+        "n_predictions": n_predictions,
+        "n_soluble": n_soluble,
+        "n_insoluble": n_predictions - n_soluble,
+        "pct_soluble": round(
+            n_soluble / n_predictions * 100,
+            1,
+        ),
+        "avg_probability": round(
+            average_probability,
+            4,
+        ),
+        "avg_latency_s": round(
+            average_latency,
+            6,
+        ),
+        "data_source": "real_api_logs",
     }

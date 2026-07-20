@@ -1,5 +1,11 @@
 {
-  "run_id": "bb8a6eb24a974252a62a821d8adf4d27",
-  "auc": 1.0,
-  "threshold": 0.05
+  "run_id": "70c4aef8bb884166a8d39e12f4709ee3",
+  "auc_validation": 0.6291,
+  "auc_test": 0.5952,
+  "threshold": 0.30,
+  "selection_rule": "Seuil sélectionné uniquement sur le jeu de validation.",
+  "evaluation_rule": "AUC finale mesurée sur un jeu de test indépendant.",
+  "model_type": "LightGBM",
+  "dataset": "DeepSol",
+  "metrics_status": "Mesures reproduites localement le 2026-07-19"
 }

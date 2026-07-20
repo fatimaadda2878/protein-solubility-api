@@ -1,107 +1,74 @@
-# 🧬 Protein Solubility Prediction API
+# Protein Solubility Prediction API
 
-API de prédiction de la solubilité des protéines recombinantes lors de l'expression dans *E. coli*, développée dans le cadre du projet MLOps (Partie 2/2).
+API FastAPI de prédiction de la solubilité de protéines recombinantes exprimées dans *E. coli*.
 
-## Architecture
+## Résultats reproductibles
 
-```
-protein-solubility-api/
-├── app/
-│   ├── main.py          # Application FastAPI
-│   ├── model.py         # Chargement et inférence du modèle
-│   ├── schemas.py       # Schémas Pydantic (validation entrées/sorties)
-│   └── export_model.py  # Export du modèle depuis MLflow
-├── tests/
-│   ├── test_api.py      # Tests des endpoints
-│   └── test_model.py    # Tests de la logique du modèle
-├── monitoring/
-│   └── drift_analysis.py # Dashboard Streamlit de monitoring
-├── model/
-│   └── lgbm_model.joblib # Modèle LightGBM sérialisé
-├── .github/workflows/
-│   └── ci_cd.yml        # Pipeline GitHub Actions
-├── Dockerfile
-├── requirements.txt
-└── README.md
-```
+| Mesure | Valeur |
+|---|---:|
+| AUC validation | 0.6291 |
+| AUC test indépendante | 0.5952 |
+| Seuil de décision | 0.30 |
+| Run MLflow | `70c4aef8bb884166a8d39e12f4709ee3` |
 
-## Lancement de l'API
+Le seuil est choisi uniquement sur le jeu de validation. Le jeu de test reste séparé et n'est utilisé que pour l'évaluation finale. Ces valeurs remplacent les anciennes valeurs non reproductibles `0.759`, `1.0` et le seuil fixe `0.05`.
 
-### Prérequis
+## Installation
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### Export du modèle depuis MLflow
+## Réentraînement
 
 ```bash
-python app/export_model.py
+python retrain_model.py
 ```
 
-### Démarrage local
+Le script entraîne sur le jeu d'entraînement, choisit le seuil sur la validation, mesure l'AUC sur le test indépendant, enregistre le run MLflow et écrit le modèle local.
+
+## Démarrage
 
 ```bash
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-L'API est disponible sur : http://localhost:8000  
-Documentation Swagger : http://localhost:8000/docs
+- API : `http://127.0.0.1:8000`
+- Swagger : `http://127.0.0.1:8000/docs`
+- Santé : `http://127.0.0.1:8000/health`
 
-### Avec Docker
-
-```bash
-# Build
-docker build -t protein-solubility-api .
-
-# Run
-docker run -p 8000:8000 protein-solubility-api
-```
-
-## Utilisation de l'API
-
-### Exemple de requête
-
-```bash
-curl -X POST "http://localhost:8000/predict" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "pI": 6.2,
-    "log_mw": 10.5,
-    "gravy_norm": 0.21,
-    "log_instability": 0.5,
-    "aromaticity": 0.08,
-    "pct_helix": 0.38,
-    "pct_turn": 0.30,
-    "pct_sheet": 0.18
-  }'
-```
-
-### Exemple de réponse
+## Exemple d'entrée
 
 ```json
 {
-  "soluble": 1,
-  "probability_soluble": 0.823,
-  "probability_insoluble": 0.177,
-  "confidence": "Élevé",
-  "inference_time_s": 0.012,
-  "recommendation": "Protéine probablement soluble — expression standard recommandée."
+  "pI": 6.2,
+  "log_mw": 10.5,
+  "gravy_norm": 0.21,
+  "log_instability": 0.5,
+  "aromaticity": 0.08,
+  "pct_helix": 0.38,
+  "pct_turn": 0.30,
+  "pct_sheet": 0.18
 }
 ```
 
-## Description des features d'entrée
+## MLflow
 
-| Feature | Description | Plage |
-|---------|-------------|-------|
-| `pI` | Point isoélectrique | 2.5 – 12.0 |
-| `log_mw` | log(Masse moléculaire) | 7.0 – 13.0 |
-| `gravy_norm` | Score GRAVY normalisé (hydrophobicité) | 0.0 – 1.0 |
-| `log_instability` | log(Indice d'instabilité) | -4.0 – 2.0 |
-| `aromaticity` | Fraction Tyr/Trp/Phe | 0.0 – 0.3 |
-| `pct_helix` | Fraction hélice alpha | 0.0 – 1.0 |
-| `pct_turn` | Fraction turn | 0.0 – 1.0 |
-| `pct_sheet` | Fraction feuillet beta | 0.0 – 1.0 |
+Sous Windows :
+
+```bat
+set MLFLOW_TRACKING_URI=sqlite:///C:/Users/adda-/mlflow.db
+```
+
+Le chemin MLflow n'est plus codé en dur dans le code.
+
+## Monitoring
+
+```bash
+streamlit run monitoring/drift_analysis.py
+```
+
+Le dashboard actuel applique une comparaison statistique par z-score. Il ne doit pas être présenté comme un rapport Evidently tant qu'Evidently n'est pas réellement exécuté dans le code. Les données simulées servent uniquement à démontrer le dashboard lorsqu'aucun log réel n'est disponible.
 
 ## Tests
 
@@ -109,7 +76,7 @@ curl -X POST "http://localhost:8000/predict" \
 pytest tests/ -v --cov=app --cov-report=term-missing
 ```
 
-## Monitoring du Data Drift
+## Limites
 
 ```bash
 streamlit run monitoring/drift_analysis.py
@@ -146,3 +113,4 @@ Dans Settings → Secrets → Actions :
 ## Auteur
 
 Fatima Adda-Rezig — Projet MLOps Partie 2/2
+Les performances restent modestes sur le test indépendant. La prédiction ne remplace pas une validation expérimentale.
