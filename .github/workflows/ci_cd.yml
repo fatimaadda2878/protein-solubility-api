@@ -81,7 +81,7 @@ jobs:
 
       - name: Démarrer le container
         run: |
-          docker run -d --name protein-api -p 8000:8000 protein-solubility-api:latest
+          docker run -d --name protein-api -p 8000:7860 protein-solubility-api:latest
           echo "Container démarré, attente 15s..."
           sleep 15
 
