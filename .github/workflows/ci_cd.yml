@@ -67,7 +67,6 @@ jobs:
         run: |
           if [ ! -f model/lgbm_model.joblib ]; then
             echo "ERREUR : model/lgbm_model.joblib absent du dépôt."
-            echo "Ajoutez le modèle via Git LFS ou commitez-le directement."
             exit 1
           fi
           if [ ! -f model/model_meta.json ]; then
@@ -80,15 +79,23 @@ jobs:
       - name: Construire l'image Docker
         run: docker build -t protein-solubility-api:latest .
 
-      - name: Tester l'image Docker
+      - name: Démarrer le container
         run: |
           docker run -d --name protein-api -p 8000:8000 protein-solubility-api:latest
-          trap "docker rm -f protein-api" EXIT
+          echo "Container démarré, attente 15s..."
+          sleep 15
 
-          echo "Attente du démarrage de l'API..."
+      - name: Afficher les logs du container
+        run: |
+          echo "=== LOGS DU CONTAINER ==="
+          docker logs protein-api
+          echo "========================="
+
+      - name: Tester les endpoints
+        run: |
           for i in {1..20}; do
             if curl -fsS http://localhost:8000/health; then
-              echo "API démarrée"
+              echo "API démarrée OK"
               break
             fi
             echo "Tentative $i/20..."
@@ -115,6 +122,10 @@ jobs:
               "pct_sheet": 0.18
             }'
           echo "Tous les endpoints OK"
+
+      - name: Arrêter le container
+        if: always()
+        run: docker rm -f protein-api || true
 
   # ── JOB 3 : Déploiement Hugging Face ─────────────────────────
   deploy:
