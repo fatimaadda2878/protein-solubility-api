@@ -18,15 +18,6 @@ Le seuil est choisi uniquement sur le jeu de validation. Le jeu de test reste s�
 ```bash
 pip install -r requirements.txt
 ```
-
-## Réentraînement
-
-```bash
-python retrain_model.py
-```
-
-Le script entraîne sur le jeu d'entraînement, choisit le seuil sur la validation, mesure l'AUC sur le test indépendant, enregistre le run MLflow et écrit le modèle local.
-
 ## Démarrage
 
 ```bash
