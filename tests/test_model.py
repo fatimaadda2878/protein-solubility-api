@@ -1,6 +1,5 @@
 """
-Tests unitaires — Logique du modèle
-Tests des fonctions de chargement et de prédiction.
+Tests unitaires — Logique du modèle ONNX
 """
 
 import pytest
@@ -30,7 +29,7 @@ class TestComputeFeatures:
             "pct_helix": 0.38, "pct_turn": 0.30, "pct_sheet": 0.18,
         }
         X = _compute_derived_features(data)
-        pI_distance = X[0, 8]  # index de pI_distance
+        pI_distance = X[0, 8]
         assert pI_distance == abs(4.0 - 7.0)
         assert pI_distance > 0
 
@@ -57,8 +56,8 @@ class TestPredict:
         mock_model = MagicMock()
         mock_model.predict_proba.return_value = np.array([[0.3, 0.7]])
 
-        with patch("app.model._model", mock_model), \
-             patch("app.model._scaler", None):
+        with patch("app.model._session", mock_model), \
+             patch("app.model._use_onnx", False):
             protein = ProteinInput(
                 pI=6.2, log_mw=10.5, gravy_norm=0.21,
                 log_instability=0.5, aromaticity=0.08,
@@ -79,8 +78,8 @@ class TestPredict:
         mock_model = MagicMock()
         mock_model.predict_proba.return_value = np.array([[0.05, 0.95]])
 
-        with patch("app.model._model", mock_model), \
-             patch("app.model._scaler", None):
+        with patch("app.model._session", mock_model), \
+             patch("app.model._use_onnx", False):
             protein = ProteinInput(
                 pI=6.2, log_mw=10.5, gravy_norm=0.21,
                 log_instability=0.5, aromaticity=0.08,
@@ -98,8 +97,8 @@ class TestPredict:
         mock_model = MagicMock()
         mock_model.predict_proba.return_value = np.array([[1.0, 0.0]])
 
-        with patch("app.model._model", mock_model), \
-             patch("app.model._scaler", None):
+        with patch("app.model._session", mock_model), \
+             patch("app.model._use_onnx", False):
             protein = ProteinInput(
                 pI=9.8, log_mw=11.5, gravy_norm=0.80,
                 log_instability=1.5, aromaticity=0.15,
