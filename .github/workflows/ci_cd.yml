@@ -203,3 +203,17 @@ jobs:
           print("Deploiement termine sur", space_id)
           print("Modele uploade explicitement.")
           PY
+      - name: Vérifier que le Space HF démarre
+        env:
+          HF_SPACE_ID: ${{ vars.HF_SPACE_ID }}
+        run: |
+          echo "Attente du démarrage du Space (60s)..."
+          sleep 60
+          SPACE_URL="https://$(echo $HF_SPACE_ID | tr '/' '-').hf.space"
+          echo "Test de $SPACE_URL/health"
+          curl -fsS "$SPACE_URL/health" | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          assert data.get('model_loaded') == True, 'model_loaded est False'
+          print('Space HF operationnel :', data['status'])
+          " || { echo 'ERREUR : Space HF non operationnel'; exit 1; }
