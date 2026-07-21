@@ -1,3 +1,13 @@
+---
+title: Protein Solubility Prediction API
+emoji: 🧬
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Protein Solubility Prediction API
 
 API FastAPI de prédiction de la solubilité de protéines recombinantes exprimées dans *E. coli*.

@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Récupérer le dépôt
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Installer Python
         uses: actions/setup-python@v5
@@ -29,31 +31,29 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
-      - name: Créer le modèle factice pour les tests
+      - name: Créer le modèle factice UNIQUEMENT dans tests/artifacts
         run: |
-          mkdir -p model tests/artifacts
+          mkdir -p tests/artifacts
           python -c "
           import joblib, numpy as np, json
           from sklearn.dummy import DummyClassifier
           model = DummyClassifier(strategy='stratified', random_state=42)
           model.fit(np.random.rand(100, 13), np.random.randint(0, 2, 100))
-          joblib.dump(model, 'model/lgbm_model.joblib')
           joblib.dump(model, 'tests/artifacts/test_model.joblib')
-          json.dump({'auc': 0.7443, 'threshold': 0.35}, open('model/model_meta.json', 'w'))
           json.dump({'auc': 0.7443, 'threshold': 0.35}, open('tests/artifacts/test_model_meta.json', 'w'))
-          print('Modele de test cree')
+          print('Modele factice cree dans tests/artifacts uniquement')
           "
 
       - name: Exécuter les tests avec couverture
         env:
-          MODEL_PATH: model/lgbm_model.joblib
-          MODEL_META_PATH: model/model_meta.json
+          MODEL_PATH: tests/artifacts/test_model.joblib
+          MODEL_META_PATH: tests/artifacts/test_model_meta.json
         run: |
           PYTHONPATH=. pytest tests/ -v --cov=app --cov-report=term-missing -p no:warnings
 
   # ── JOB 2 : Build Docker avec le vrai modèle ─────────────────
   build:
-    name: Construire et tester l'image Docker
+    name: Construire et tester l image Docker
     needs: tests
     runs-on: ubuntu-latest
 
@@ -66,24 +66,24 @@ jobs:
       - name: Vérifier la présence du vrai modèle
         run: |
           if [ ! -f model/lgbm_model.joblib ]; then
-            echo "ERREUR : model/lgbm_model.joblib absent du dépôt."
+            echo "ERREUR : model/lgbm_model.joblib absent du depot."
             exit 1
           fi
           if [ ! -f model/model_meta.json ]; then
-            echo "ERREUR : model/model_meta.json absent du dépôt."
+            echo "ERREUR : model/model_meta.json absent du depot."
             exit 1
           fi
-          echo "OK - Modèle trouvé"
+          echo "OK - Modele trouve"
           ls -lh model/
 
-      - name: Construire l'image Docker
+      - name: Construire l image Docker
         run: docker build -t protein-solubility-api:latest .
 
       - name: Démarrer le container
         run: |
           docker run -d --name protein-api -p 8000:7860 protein-solubility-api:latest
-          echo "Container démarré, attente 15s..."
-          sleep 15
+          echo "Container demarre, attente 20s..."
+          sleep 20
 
       - name: Afficher les logs du container
         run: |
@@ -95,7 +95,7 @@ jobs:
         run: |
           for i in {1..20}; do
             if curl -fsS http://localhost:8000/health; then
-              echo "API démarrée OK"
+              echo "API demarree OK"
               break
             fi
             echo "Tentative $i/20..."
@@ -129,16 +129,22 @@ jobs:
 
   # ── JOB 3 : Déploiement Hugging Face ─────────────────────────
   deploy:
-    name: Déployer sur Hugging Face
+    name: Deployer sur Hugging Face
     needs: build
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
 
     steps:
-      - name: Récupérer le dépôt
+      - name: Récupérer le dépôt avec LFS
         uses: actions/checkout@v4
         with:
           lfs: true
+
+      - name: Vérifier les fichiers LFS
+        run: |
+          git lfs pull
+          ls -lh model/lgbm_model.joblib
+          echo "OK - Modele LFS present"
 
       - name: Installer huggingface-hub
         run: pip install huggingface-hub
@@ -150,8 +156,8 @@ jobs:
         run: |
           test -n "$HF_TOKEN"    || { echo "HF_TOKEN absent"; exit 1; }
           test -n "$HF_SPACE_ID" || { echo "HF_SPACE_ID absent"; exit 1; }
-          test -f model/lgbm_model.joblib || { echo "Modèle absent"; exit 1; }
-          echo "OK - Secrets et modèle présents"
+          test -f model/lgbm_model.joblib || { echo "Modele absent"; exit 1; }
+          echo "OK - Secrets et modele presents"
 
       - name: Déployer sur Hugging Face Spaces
         env:
@@ -163,11 +169,16 @@ jobs:
           from huggingface_hub import HfApi
 
           api = HfApi()
+          space_id = os.environ["HF_SPACE_ID"]
+          token = os.environ["HF_TOKEN"]
+
+          # Upload du dossier principal
+          print("Upload du dossier principal...")
           api.upload_folder(
               folder_path=".",
-              repo_id=os.environ["HF_SPACE_ID"],
+              repo_id=space_id,
               repo_type="space",
-              token=os.environ["HF_TOKEN"],
+              token=token,
               ignore_patterns=[
                   ".git/*",
                   "__pycache__/*",
@@ -178,5 +189,17 @@ jobs:
                   "*.ipynb",
               ],
           )
-          print("Déploiement terminé sur", os.environ["HF_SPACE_ID"])
+
+          # Upload explicite du modele LFS
+          print("Upload explicite du modele LFS...")
+          api.upload_file(
+              path_or_fileobj="model/lgbm_model.joblib",
+              path_in_repo="model/lgbm_model.joblib",
+              repo_id=space_id,
+              repo_type="space",
+              token=token,
+          )
+
+          print("Deploiement termine sur", space_id)
+          print("Modele uploade explicitement.")
           PY
