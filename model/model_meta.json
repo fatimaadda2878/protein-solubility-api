@@ -1,11 +1,62 @@
 {
-  "run_id": "70c4aef8bb884166a8d39e12f4709ee3",
-  "auc_validation": 0.6291,
-  "auc_test": 0.5952,
-  "threshold": 0.30,
-  "selection_rule": "Seuil sélectionné uniquement sur le jeu de validation.",
-  "evaluation_rule": "AUC finale mesurée sur un jeu de test indépendant.",
-  "model_type": "LightGBM",
+  "run_id": "d87e39a5657745a3aab16b3a53e1fa6f",
+  "source": "mlflow",
+  "tracking_uri": "sqlite:///C:/Users/adda-/mlflow.db",
+  "experiment_name": "protein-solubility-ecoli",
+  "artifact_path": "model",
+  "model_version": "20260720T160120Z",
+  "algorithm": "LightGBM",
   "dataset": "DeepSol",
-  "metrics_status": "Mesures reproduites localement le 2026-07-19"
+  "features": [
+    "pI",
+    "log_mw",
+    "gravy_norm",
+    "log_instability",
+    "aromaticity",
+    "pct_helix",
+    "pct_turn",
+    "pct_sheet",
+    "pI_distance",
+    "pct_coil",
+    "helix_x_gravy",
+    "stability_score",
+    "helix_sheet_ratio"
+  ],
+  "random_state": 42,
+  "split_sizes": {
+    "train": 62478,
+    "validation": 6942,
+    "test": 1999
+  },
+  "threshold": 0.25,
+  "threshold_selection": {
+    "split": "validation",
+    "false_negative_cost_eur": 1200,
+    "false_positive_cost_eur": 200,
+    "validation_cost_eur": 804800
+  },
+  "validation_metrics": {
+    "roc_auc": 0.629571,
+    "accuracy": 0.423221,
+    "precision": 0.419701,
+    "recall": 0.998619,
+    "f1": 0.591011,
+    "tn": 45,
+    "fp": 4000,
+    "fn": 4,
+    "tp": 2893,
+    "business_cost_eur": 804800
+  },
+  "test_metrics": {
+    "roc_auc": 0.589549,
+    "accuracy": 0.501251,
+    "precision": 0.500752,
+    "recall": 0.999,
+    "f1": 0.667112,
+    "tn": 3,
+    "fp": 996,
+    "fn": 1,
+    "tp": 999,
+    "business_cost_eur": 200400
+  }
 }

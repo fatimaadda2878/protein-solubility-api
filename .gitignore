@@ -55,3 +55,8 @@ Thumbs.db
 .coverage
 htmlcov/
 coverage.xml
+*.png
+*.zip
+GUIDE_*.md
+retrain_model.py
+Confirmez_vos*/
