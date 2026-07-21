@@ -1,7 +1,7 @@
 {
   "run_id": "d87e39a5657745a3aab16b3a53e1fa6f",
   "source": "mlflow",
-  "tracking_uri": "sqlite:///C:/Users/adda-/mlflow.db",
+  "tracking_uri": "sqlite:///mlflow.db",
   "experiment_name": "protein-solubility-ecoli",
   "artifact_path": "model",
   "model_version": "20260720T160120Z",
@@ -58,5 +58,7 @@
     "fn": 1,
     "tp": 999,
     "business_cost_eur": 200400
-  }
+  },
+  "auc_validation": 0.629571,
+  "auc_test": 0.589549
 }
