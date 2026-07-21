@@ -63,22 +63,37 @@ jobs:
         with:
           lfs: true
 
-      - name: Vérifier la présence du vrai modèle
+      - name: Vérifier la présence du vrai modèle joblib
         run: |
           if [ ! -f model/lgbm_model.joblib ]; then
             echo "ERREUR : model/lgbm_model.joblib absent."
             exit 1
           fi
-          if [ ! -f model/lgbm_model.onnx ]; then
-            echo "ERREUR : model/lgbm_model.onnx absent."
-            exit 1
-          fi
-          if [ ! -f model/model_meta.json ]; then
-            echo "ERREUR : model/model_meta.json absent."
-            exit 1
-          fi
-          echo "OK - Modeles trouves"
+          echo "OK - Modele joblib trouve"
           ls -lh model/
+
+      - name: Régénérer le modèle ONNX sur Linux
+        run: |
+          pip install onnxmltools onnxruntime lightgbm joblib numpy scikit-learn
+          python -c "
+          import joblib
+          import onnxmltools
+          from onnxmltools.convert import convert_lightgbm
+          from onnxmltools.convert.common.data_types import FloatTensorType
+
+          model = joblib.load('model/lgbm_model.joblib')
+          initial_type = [('float_input', FloatTensorType([None, 13]))]
+          onnx_model = convert_lightgbm(
+              model.booster_,
+              initial_types=initial_type,
+              target_opset=12
+          )
+          with open('model/lgbm_model.onnx', 'wb') as f:
+              f.write(onnx_model.SerializeToString())
+          print('ONNX regenere sur Linux OK')
+          import os
+          print('Taille:', os.path.getsize('model/lgbm_model.onnx'), 'bytes')
+          "
 
       - name: Construire l image Docker
         run: docker build -t protein-solubility-api:latest .
@@ -144,12 +159,34 @@ jobs:
         with:
           lfs: true
 
-      - name: Vérifier les fichiers LFS
+      - name: Vérifier les fichiers
         run: |
           git lfs pull
           ls -lh model/lgbm_model.joblib
-          ls -lh model/lgbm_model.onnx
-          echo "OK - Modeles LFS presents"
+          echo "OK - Modele joblib present"
+
+      - name: Régénérer le modèle ONNX sur Linux pour déploiement
+        run: |
+          pip install onnxmltools onnxruntime lightgbm joblib numpy scikit-learn
+          python -c "
+          import joblib
+          import onnxmltools
+          from onnxmltools.convert import convert_lightgbm
+          from onnxmltools.convert.common.data_types import FloatTensorType
+
+          model = joblib.load('model/lgbm_model.joblib')
+          initial_type = [('float_input', FloatTensorType([None, 13]))]
+          onnx_model = convert_lightgbm(
+              model.booster_,
+              initial_types=initial_type,
+              target_opset=12
+          )
+          with open('model/lgbm_model.onnx', 'wb') as f:
+              f.write(onnx_model.SerializeToString())
+          print('ONNX regenere pour deploiement OK')
+          import os
+          print('Taille:', os.path.getsize('model/lgbm_model.onnx'), 'bytes')
+          "
 
       - name: Installer huggingface-hub
         run: pip install huggingface-hub
@@ -161,9 +198,7 @@ jobs:
         run: |
           test -n "$HF_TOKEN"    || { echo "HF_TOKEN absent"; exit 1; }
           test -n "$HF_SPACE_ID" || { echo "HF_SPACE_ID absent"; exit 1; }
-          test -f model/lgbm_model.joblib || { echo "Modele joblib absent"; exit 1; }
-          test -f model/lgbm_model.onnx   || { echo "Modele ONNX absent"; exit 1; }
-          echo "OK - Secrets et modeles presents"
+          echo "OK - Secrets presents"
 
       - name: Déployer sur Hugging Face Spaces
         env:
@@ -204,7 +239,7 @@ jobs:
               token=token,
           )
 
-          print("Upload explicite du modele ONNX...")
+          print("Upload explicite du modele ONNX (genere sur Linux)...")
           api.upload_file(
               path_or_fileobj="model/lgbm_model.onnx",
               path_in_repo="model/lgbm_model.onnx",
