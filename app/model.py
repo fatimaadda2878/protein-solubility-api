@@ -1,211 +1,165 @@
 """
-Chargement et inférence du modèle LightGBM.
+Chargement et inférence du modèle — ONNX Runtime (avec fallback joblib)
+Le modèle est chargé une seule fois au démarrage pour optimiser les performances.
 """
+
+from __future__ import annotations
 
 import json
 import os
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
-import joblib
 import numpy as np
 
+# ── Chemins des modèles ───────────────────────────────────────
+ONNX_PATH       = Path(os.getenv("ONNX_PATH",       "model/lgbm_model.onnx"))
+MODEL_PATH      = Path(os.getenv("MODEL_PATH",      "model/lgbm_model.joblib"))
+MODEL_META_PATH = Path(os.getenv("MODEL_META_PATH", "model/model_meta.json"))
 
-_model = None
-_scaler = None
-
-FEATURES = [
-    "pI",
-    "log_mw",
-    "gravy_norm",
-    "log_instability",
-    "aromaticity",
-    "pct_helix",
-    "pct_turn",
-    "pct_sheet",
-    "pI_distance",
-    "pct_coil",
-    "helix_x_gravy",
-    "stability_score",
-    "helix_sheet_ratio",
-]
-
-DEFAULT_THRESHOLD = 0.30
+# ── Variables globales ────────────────────────────────────────
+_session   = None
+_meta: Dict[str, Any] = {}
+_threshold = 0.25
+_use_onnx  = False
 
 
-def get_model_metadata() -> Dict[str, Any]:
-    """Charge les métadonnées du modèle depuis model/model_meta.json."""
-    metadata_path = Path(
-        os.getenv("MODEL_META_PATH", "model/model_meta.json")
+def load_model() -> None:
+    """
+    Je charge la session ONNX Runtime (ou joblib en fallback).
+    Appelé une seule fois au démarrage de l'API.
+    """
+    global _session, _meta, _threshold, _use_onnx
+
+    # Lecture des métadonnées
+    if MODEL_META_PATH.exists():
+        _meta = json.loads(MODEL_META_PATH.read_text(encoding="utf-8"))
+        _threshold = float(_meta.get("threshold", 0.25))
+
+    # Priorité ONNX
+    if ONNX_PATH.exists():
+        import onnxruntime as rt
+        _session = rt.InferenceSession(str(ONNX_PATH))
+        _use_onnx = True
+        return
+
+    # Fallback joblib
+    if MODEL_PATH.exists():
+        import joblib
+        _session = joblib.load(MODEL_PATH)
+        _use_onnx = False
+        return
+
+    raise FileNotFoundError(
+        f"Modèle introuvable : {ONNX_PATH} ni {MODEL_PATH}. "
+        "Exécutez d'abord python retrain_model.py puis "
+        "python optimization/onnx_optimization.py"
     )
-
-    defaults = {
-        "model_type": "LightGBM",
-        "dataset": "DeepSol",
-        "run_id": None,
-        "auc_validation": None,
-        "auc_test": None,
-        "threshold": DEFAULT_THRESHOLD,
-    }
-
-    if not metadata_path.exists():
-        return defaults
-
-    try:
-        with metadata_path.open("r", encoding="utf-8") as file:
-            metadata = json.load(file)
-
-        if not isinstance(metadata, dict):
-            return defaults
-
-        result = {**defaults, **metadata}
-
-        try:
-            threshold = float(result.get("threshold", DEFAULT_THRESHOLD))
-        except (TypeError, ValueError):
-            threshold = DEFAULT_THRESHOLD
-
-        if not 0.0 <= threshold <= 1.0:
-            threshold = DEFAULT_THRESHOLD
-
-        result["threshold"] = threshold
-        return result
-
-    except (OSError, json.JSONDecodeError):
-        return defaults
 
 
 def is_model_loaded() -> bool:
-    """Indique si le modèle est déjà chargé en mémoire."""
-    return _model is not None
+    """Retourne True si le modèle est chargé en mémoire."""
+    return _session is not None
 
 
-def load_model():
-    """Charge le modèle et, s'il existe, le scaler."""
-    global _model, _scaler
-
-    if _model is not None:
-        return _model
-
-    model_path = Path(
-        os.getenv("MODEL_PATH", "model/lgbm_model.joblib")
-    )
-    scaler_path = Path(
-        os.getenv("SCALER_PATH", "model/scaler.joblib")
-    )
-
-    if not model_path.exists():
-        raise FileNotFoundError(
-            f"Modèle introuvable : {model_path}. "
-            "Exécutez d'abord python retrain_model.py."
-        )
-
-    _model = joblib.load(model_path)
-    _scaler = joblib.load(scaler_path) if scaler_path.exists() else None
-
-    return _model
+def get_model_metadata() -> Optional[Dict[str, Any]]:
+    """Retourne les métadonnées du modèle déployé."""
+    if not _meta:
+        if MODEL_META_PATH.exists():
+            return json.loads(MODEL_META_PATH.read_text(encoding="utf-8"))
+        return None
+    return _meta
 
 
 def _compute_derived_features(data: dict) -> np.ndarray:
-    """Construit les 13 variables utilisées lors de l'entraînement."""
-    p_i = data["pI"]
-    log_mw = data["log_mw"]
-    gravy_norm = data["gravy_norm"]
-    log_instability = data["log_instability"]
-    aromaticity = data["aromaticity"]
-    pct_helix = data["pct_helix"]
-    pct_turn = data["pct_turn"]
-    pct_sheet = data["pct_sheet"]
+    """
+    Je calcule les 5 features dérivées à partir des 8 features de base.
+    """
+    pI          = data["pI"]
+    gravy_norm  = data["gravy_norm"]
+    log_instab  = data["log_instability"]
+    pct_helix   = data["pct_helix"]
+    pct_turn    = data["pct_turn"]
+    pct_sheet   = data["pct_sheet"]
 
-    p_i_distance = abs(p_i - 7.0)
-    pct_coil = max(
-        0.0,
-        1.0 - pct_helix - pct_turn - pct_sheet,
-    )
-    helix_x_gravy = pct_helix * gravy_norm
-    stability_score = log_instability * gravy_norm
+    pI_distance       = abs(pI - 7.0)
+    pct_coil          = max(0.0, 1.0 - pct_helix - pct_turn - pct_sheet)
+    helix_x_gravy     = pct_helix * gravy_norm
+    stability_score   = log_instab * gravy_norm
     helix_sheet_ratio = pct_helix / (pct_sheet + 1e-6)
 
-    return np.array(
-        [
-            p_i,
-            log_mw,
-            gravy_norm,
-            log_instability,
-            aromaticity,
-            pct_helix,
-            pct_turn,
-            pct_sheet,
-            p_i_distance,
-            pct_coil,
-            helix_x_gravy,
-            stability_score,
-            helix_sheet_ratio,
-        ],
-        dtype=float,
-    ).reshape(1, -1)
+    return np.array([
+        data["pI"], data["log_mw"], gravy_norm, log_instab,
+        data["aromaticity"], pct_helix, pct_turn, pct_sheet,
+        pI_distance, pct_coil, helix_x_gravy,
+        stability_score, helix_sheet_ratio,
+    ], dtype=np.float32).reshape(1, -1)
 
 
 def predict(protein_input) -> Dict[str, Any]:
-    """Effectue une prédiction de solubilité."""
-    global _model, _scaler
+    """
+    Je réalise la prédiction de solubilité pour une protéine.
+    Utilise ONNX Runtime si disponible, sinon joblib.
+    """
+    global _session
 
-    if _model is None:
+    if _session is None:
         load_model()
 
+    # Construction du vecteur de features
     if hasattr(protein_input, "model_dump"):
         data = protein_input.model_dump()
     else:
         data = protein_input.dict()
 
-    features = _compute_derived_features(data)
+    X = _compute_derived_features(data)
 
-    if _scaler is not None:
-        features = _scaler.transform(features)
+    # Inférence
+    if _use_onnx:
+        import onnxruntime as rt
+        input_name = _session.get_inputs()[0].name
+        results = _session.run(None, {input_name: X})
+        proba_dict     = results[1][0]
+        prob_insoluble = float(proba_dict[0])
+        prob_soluble   = float(proba_dict[1])
+    else:
+        proba          = _session.predict_proba(X)[0]
+        prob_insoluble = float(proba[0])
+        prob_soluble   = float(proba[1])
 
-    probabilities = _model.predict_proba(features)[0]
-    probability_insoluble = float(probabilities[0])
-    probability_soluble = float(probabilities[1])
+    # Application du seuil optimal
+    prediction = 1 if prob_soluble >= _threshold else 0
 
-    threshold = float(
-        get_model_metadata().get(
-            "threshold",
-            DEFAULT_THRESHOLD,
-        )
-    )
-    prediction = int(probability_soluble >= threshold)
-
-    maximum_probability = max(
-        probability_soluble,
-        probability_insoluble,
-    )
-
-    if maximum_probability >= 0.80:
+    # Niveau de confiance
+    max_prob = max(prob_soluble, prob_insoluble)
+    if max_prob >= 0.80:
         confidence = "Élevé"
-    elif maximum_probability >= 0.60:
+    elif max_prob >= 0.60:
         confidence = "Modéré"
     else:
         confidence = "Faible"
 
-    if prediction == 1 and probability_soluble >= 0.70:
+    # Recommandation pratique
+    if prediction == 1 and prob_soluble >= 0.70:
         recommendation = (
-            "Protéine probablement soluble — expression standard recommandée."
+            "Protéine probablement soluble — expression standard recommandée. "
+            "Température d'induction 25-37°C."
         )
     elif prediction == 1:
         recommendation = (
-            "Solubilité modérée — envisager une induction à basse température "
-            "et un tag de solubilisation."
+            "Solubilité modérée — envisager une induction à 16-20°C "
+            "avec un tag de solubilisation (MBP ou SUMO)."
         )
     else:
         recommendation = (
-            "Risque élevé de corps d'inclusion — réduire la température "
-            "d'induction ou utiliser un tag de solubilisation."
+            "Risque élevé de corps d'inclusion — réduire la T° d'induction, "
+            "utiliser un tag MBP/SUMO, ou co-exprimer avec des chaperones."
         )
 
     return {
-        "soluble": prediction,
-        "probability_soluble": round(probability_soluble, 4),
-        "probability_insoluble": round(probability_insoluble, 4),
-        "confidence": confidence,
-        "recommendation": recommendation,
+        "soluble":               prediction,
+        "probability_soluble":   round(prob_soluble,   4),
+        "probability_insoluble": round(prob_insoluble, 4),
+        "confidence":            confidence,
+        "recommendation":        recommendation,
     }
