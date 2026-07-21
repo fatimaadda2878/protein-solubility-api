@@ -80,12 +80,27 @@ if production.empty:
     st.info("Aucune prédiction réelle disponible dans logs/predictions.jsonl.")
     st.stop()
 
+# ── KPIs principaux ───────────────────────────────────────────
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Prédictions totales", len(production))
 col2.metric("% solubles prédits", f"{production['prediction'].mean() * 100:.1f}%")
-col3.metric("Latence moyenne", f"{production['inference_time_s'].mean() * 1000:.1f} ms")
-col4.metric("Score moyen", f"{production['probability'].mean():.3f}")
+col3.metric("Score moyen", f"{production['probability'].mean():.3f}")
+col4.metric("Latence P50", f"{production['inference_time_s'].quantile(0.50) * 1000:.1f} ms")
 
+# ── Latences P50 / P95 / P99 ─────────────────────────────────
+st.subheader("⚡ Latence API")
+p50 = production["inference_time_s"].quantile(0.50) * 1000
+p95 = production["inference_time_s"].quantile(0.95) * 1000
+p99 = production["inference_time_s"].quantile(0.99) * 1000
+avg = production["inference_time_s"].mean() * 1000
+
+lat1, lat2, lat3, lat4 = st.columns(4)
+lat1.metric("Moyenne", f"{avg:.1f} ms")
+lat2.metric("P50 (médiane)", f"{p50:.1f} ms")
+lat3.metric("P95", f"{p95:.1f} ms")
+lat4.metric("P99", f"{p99:.1f} ms")
+
+# ── Détection du Data Drift ───────────────────────────────────
 results = []
 for feature in FEATURES:
     if feature not in production or feature not in reference:
