@@ -58,7 +58,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 Sous Windows :
 
 ```bat
-set MLFLOW_TRACKING_URI=sqlite:///C:/Users/adda-/mlflow.db
+set MLFLOW_TRACKING_URI=sqlite:///mlflow.db
 ```
 
 Le chemin MLflow n'est plus codé en dur dans le code.
