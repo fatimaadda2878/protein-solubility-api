@@ -111,6 +111,15 @@ Dans Settings → Secrets → Actions :
 - **Seuil de décision** : 0.25 (optimisé selon coût métier : FN = 1 200€, FP = 200€)
 - **Tracking** : MLflow (experiment `protein-solubility-ecoli`)
 
+## Analyse critique des performances
+
+Le modèle prédit 99,8 % des protéines comme solubles sur le test indépendant
+(3 VN, 996 FP, 1 FN, 999 VP). Son coût métier (200 400 €) est légèrement
+supérieur à celui d'un modèle prédisant systématiquement « soluble »
+(199 800 €). Le seuil optimisé sur la validation ne se généralise pas
+correctement sur le test indépendant. Ce résultat indique que les features
+physicochimiques seules sont insuffisantes pour une séparation robuste.
+
 ## Auteur
 
 Fatima Adda-Rezig — Projet MLOps Partie 2/2
