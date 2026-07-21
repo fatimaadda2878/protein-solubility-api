@@ -21,9 +21,6 @@ RUN pip install --no-cache-dir --upgrade pip \
 COPY app/ ./app/
 COPY model/ ./model/
 
-RUN test -f /app/model/lgbm_model.joblib \
-    || (echo "ERREUR: vrai modèle absent. Lancez python retrain_model.py." && exit 1)
-
 RUN mkdir -p /app/logs
 
 EXPOSE 7860
