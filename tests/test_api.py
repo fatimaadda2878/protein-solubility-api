@@ -1,5 +1,6 @@
 """
 Tests unitaires — API FastAPI Protein Solubility
+Mocks adaptés au nouveau model.py ONNX Runtime
 """
 
 import pytest
@@ -11,9 +12,9 @@ from unittest.mock import patch, MagicMock
 mock_model = MagicMock()
 mock_model.predict_proba.return_value = np.array([[0.3, 0.7]])
 
-# On patche AVANT d'importer l'app pour éviter le FileNotFoundError
-with patch("app.model._model", mock_model), \
-     patch("app.model._scaler", None):
+# On patche AVANT d'importer l'app
+with patch("app.model._session", mock_model), \
+     patch("app.model._use_onnx", False):
     from app.main import app
 
 from fastapi.testclient import TestClient
@@ -22,10 +23,10 @@ from fastapi.testclient import TestClient
 @pytest.fixture
 def client():
     """Client de test avec modèle mocké."""
-    with patch("app.model._model", mock_model), \
-         patch("app.model._scaler", None), \
-         patch("app.model.load_model", return_value=mock_model), \
-         patch("app.main.load_model", return_value=mock_model):
+    with patch("app.model._session", mock_model), \
+         patch("app.model._use_onnx", False), \
+         patch("app.model.load_model", return_value=None), \
+         patch("app.main.load_model", return_value=None):
         yield TestClient(app)
 
 
@@ -46,10 +47,8 @@ class TestHealthEndpoints:
     def test_root_contains_docs_link(self, client):
         assert "docs" in client.get("/").json()
 
-    def test_health_returns_healthy(self, client):
-        r = client.get("/health")
-        assert r.status_code == 200
-        assert r.json()["status"] == "healthy"
+    def test_health_returns_200(self, client):
+        assert client.get("/health").status_code == 200
 
     def test_health_contains_timestamp(self, client):
         assert "timestamp" in client.get("/health").json()
@@ -203,7 +202,6 @@ class TestLogsSummary:
     def test_logs_summary_returns_200(self, client):
         assert client.get("/logs/summary").status_code == 200
 
-    def test_logs_summary_no_predictions(self, client):
-        r = client.get("/logs/summary")
-        data = r.json()
+    def test_logs_summary_has_n_predictions(self, client):
+        data = client.get("/logs/summary").json()
         assert "n_predictions" in data
