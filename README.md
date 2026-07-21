@@ -17,9 +17,9 @@ API FastAPI de prédiction de la solubilité de protéines recombinantes exprim�
 | Mesure | Valeur |
 |---|---:|
 | AUC validation | 0.6291 |
-| AUC test indépendante | 0.5952 |
-| Seuil de décision | 0.30 |
-| Run MLflow | `70c4aef8bb884166a8d39e12f4709ee3` |
+| AUC test indépendante | 0.5895 |
+| Seuil de décision | 0.25 |
+| Run MLflow | `d87e39a5657745a3aab16b3a53e1fa6f` |
 
 Le seuil est choisi uniquement sur le jeu de validation. Le jeu de test reste séparé et n'est utilisé que pour l'évaluation finale. Ces valeurs remplacent les anciennes valeurs non reproductibles `0.759`, `1.0` et le seuil fixe `0.05`.
 
@@ -107,9 +107,18 @@ Dans Settings → Secrets → Actions :
 - **Algorithme** : LightGBM (optimisé via Optuna, 50 trials)
 - **Dataset** : DeepSol — 71 419 protéines *E. coli* (Khurana et al. 2018)
 - **AUC Validation** : 0.6291 sur le jeu de validation
-- **AUC de test Indépendante** : 0.5952
-- **Seuil de décision** : 0.3 (optimisé selon coût métier : FN = 1 200€, FP = 200€)
+- **AUC de test Indépendante** : 0.5895
+- **Seuil de décision** : 0.25 (optimisé selon coût métier : FN = 1 200€, FP = 200€)
 - **Tracking** : MLflow (experiment `protein-solubility-ecoli`)
+
+## Analyse critique des performances
+
+Le modèle prédit 99,8 % des protéines comme solubles sur le test indépendant
+(3 VN, 996 FP, 1 FN, 999 VP). Son coût métier (200 400 €) est légèrement
+supérieur à celui d'un modèle prédisant systématiquement « soluble »
+(199 800 €). Le seuil optimisé sur la validation ne se généralise pas
+correctement sur le test indépendant. Ce résultat indique que les features
+physicochimiques seules sont insuffisantes pour une séparation robuste.
 
 ## Auteur
 
