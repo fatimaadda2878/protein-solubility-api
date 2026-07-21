@@ -25,3 +25,4 @@ httpx==0.27.0
 # ── Optimisation ──────────────────────────────────────────────
 onnxruntime==1.18.0
 onnxruntime==1.18.0
+onnxmltools==1.12.0
