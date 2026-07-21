@@ -40,7 +40,7 @@ jobs:
           model = DummyClassifier(strategy='stratified', random_state=42)
           model.fit(np.random.rand(100, 13), np.random.randint(0, 2, 100))
           joblib.dump(model, 'tests/artifacts/test_model.joblib')
-          json.dump({'auc': 0.7443, 'threshold': 0.35}, open('tests/artifacts/test_model_meta.json', 'w'))
+          json.dump({'auc': 0.6296, 'threshold': 0.25}, open('tests/artifacts/test_model_meta.json', 'w'))
           print('Modele factice cree dans tests/artifacts uniquement')
           "
 
@@ -66,14 +66,18 @@ jobs:
       - name: Vérifier la présence du vrai modèle
         run: |
           if [ ! -f model/lgbm_model.joblib ]; then
-            echo "ERREUR : model/lgbm_model.joblib absent du depot."
+            echo "ERREUR : model/lgbm_model.joblib absent."
+            exit 1
+          fi
+          if [ ! -f model/lgbm_model.onnx ]; then
+            echo "ERREUR : model/lgbm_model.onnx absent."
             exit 1
           fi
           if [ ! -f model/model_meta.json ]; then
-            echo "ERREUR : model/model_meta.json absent du depot."
+            echo "ERREUR : model/model_meta.json absent."
             exit 1
           fi
-          echo "OK - Modele trouve"
+          echo "OK - Modeles trouves"
           ls -lh model/
 
       - name: Construire l image Docker
@@ -144,7 +148,8 @@ jobs:
         run: |
           git lfs pull
           ls -lh model/lgbm_model.joblib
-          echo "OK - Modele LFS present"
+          ls -lh model/lgbm_model.onnx
+          echo "OK - Modeles LFS presents"
 
       - name: Installer huggingface-hub
         run: pip install huggingface-hub
@@ -156,8 +161,9 @@ jobs:
         run: |
           test -n "$HF_TOKEN"    || { echo "HF_TOKEN absent"; exit 1; }
           test -n "$HF_SPACE_ID" || { echo "HF_SPACE_ID absent"; exit 1; }
-          test -f model/lgbm_model.joblib || { echo "Modele absent"; exit 1; }
-          echo "OK - Secrets et modele presents"
+          test -f model/lgbm_model.joblib || { echo "Modele joblib absent"; exit 1; }
+          test -f model/lgbm_model.onnx   || { echo "Modele ONNX absent"; exit 1; }
+          echo "OK - Secrets et modeles presents"
 
       - name: Déployer sur Hugging Face Spaces
         env:
@@ -172,7 +178,6 @@ jobs:
           space_id = os.environ["HF_SPACE_ID"]
           token = os.environ["HF_TOKEN"]
 
-          # Upload du dossier principal
           print("Upload du dossier principal...")
           api.upload_folder(
               folder_path=".",
@@ -190,8 +195,7 @@ jobs:
               ],
           )
 
-          # Upload explicite du modele LFS
-          print("Upload explicite du modele LFS...")
+          print("Upload explicite du modele joblib...")
           api.upload_file(
               path_or_fileobj="model/lgbm_model.joblib",
               path_in_repo="model/lgbm_model.joblib",
@@ -200,15 +204,24 @@ jobs:
               token=token,
           )
 
+          print("Upload explicite du modele ONNX...")
+          api.upload_file(
+              path_or_fileobj="model/lgbm_model.onnx",
+              path_in_repo="model/lgbm_model.onnx",
+              repo_id=space_id,
+              repo_type="space",
+              token=token,
+          )
+
           print("Deploiement termine sur", space_id)
-          print("Modele uploade explicitement.")
           PY
+
       - name: Vérifier que le Space HF démarre
         env:
           HF_SPACE_ID: ${{ vars.HF_SPACE_ID }}
         run: |
-          echo "Attente du démarrage du Space (60s)..."
-          sleep 60
+          echo "Attente du démarrage du Space (90s)..."
+          sleep 90
           SPACE_URL="https://$(echo $HF_SPACE_ID | tr '/' '-').hf.space"
           echo "Test de $SPACE_URL/health"
           curl -fsS "$SPACE_URL/health" | python3 -c "
