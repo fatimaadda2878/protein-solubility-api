@@ -12,6 +12,15 @@ pinned: false
 
 API FastAPI de prédiction de la solubilité de protéines recombinantes exprimées dans *E. coli*.
 
+## 🚀 API en production
+
+L'API est déployée et accessible publiquement sur Hugging Face Spaces :
+
+- **URL de base** : https://fatimaadda2878-protein-solubility-api.hf.space
+- **Documentation Swagger** : https://fatimaadda2878-protein-solubility-api.hf.space/docs
+- **Health check** : https://fatimaadda2878-protein-solubility-api.hf.space/health
+- **Space HF** : https://huggingface.co/spaces/fatimaadda2878/protein-solubility-api
+
 ## Résultats reproductibles
 
 | Mesure | Valeur |
