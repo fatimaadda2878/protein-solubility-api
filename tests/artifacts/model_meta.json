@@ -1,0 +1,24 @@
+{
+  "model_type": "DummyClassifier",
+  "n_features": 13,
+  "optimal_threshold": 0.23,
+  "auc_roc": 0.5,
+  "cost_fn": 1200,
+  "cost_fp": 200,
+  "features": [
+    "pI",
+    "log_mw",
+    "gravy_norm",
+    "log_instability",
+    "aromaticity",
+    "pct_helix",
+    "pct_turn",
+    "pct_sheet",
+    "pI_distance",
+    "pct_coil",
+    "helix_x_gravy",
+    "stability_score",
+    "helix_sheet_ratio"
+  ],
+  "_note": "Dummy model for CI/CD testing \u2014 not for production"
+}
