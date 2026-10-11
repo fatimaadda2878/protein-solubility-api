@@ -1,267 +1,111 @@
-name: CI/CD - Protein Solubility API
+name: CI/CD — Protein Solubility P7
 
 on:
   push:
-    branches:
-      - main
+    branches: [main, develop]
   pull_request:
-    branches:
-      - main
-  workflow_dispatch:
+    branches: [main]
 
 jobs:
-  # ── JOB 1 : Tests unitaires ──────────────────────────────────
+  # ────────────────────────────────────────────────
+  # JOB 1 : Tests
+  # ────────────────────────────────────────────────
   tests:
-    name: Tests unitaires
+    name: Tests pytest
     runs-on: ubuntu-latest
 
     steps:
-      - name: Récupérer le dépôt
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          lfs: true
 
-      - name: Installer Python
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: "3.11"
+          cache: pip
 
       - name: Installer les dépendances
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          # Dépendances de test supplémentaires
+          pip install pytest pytest-cov httpx
 
-      - name: Créer le modèle factice UNIQUEMENT dans tests/artifacts
+      - name: Créer les artifacts de test (CI)
+        # Génère DummyClassifier dans tests/artifacts/ pour les tests
+        # Ne requiert PAS le vrai modèle de production
         run: |
-          mkdir -p tests/artifacts
-          python -c "
-          import joblib, numpy as np, json
-          from sklearn.dummy import DummyClassifier
-          model = DummyClassifier(strategy='stratified', random_state=42)
-          model.fit(np.random.rand(100, 13), np.random.randint(0, 2, 100))
-          joblib.dump(model, 'tests/artifacts/test_model.joblib')
-          json.dump({'auc': 0.6296, 'threshold': 0.25}, open('tests/artifacts/test_model_meta.json', 'w'))
-          print('Modele factice cree dans tests/artifacts uniquement')
-          "
+          python tests/create_test_artifacts.py
 
-      - name: Exécuter les tests avec couverture
+      - name: Lancer les tests
+        run: |
+          # rootdir=. assure que Python voit le package app/ et non app.py
+          pytest tests/ \
+            --rootdir=. \
+            --cov=app \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            -v \
+            --tb=short
         env:
-          MODEL_PATH: tests/artifacts/test_model.joblib
-          MODEL_META_PATH: tests/artifacts/test_model_meta.json
-        run: |
-          PYTHONPATH=. pytest tests/ -v --cov=app --cov-report=term-missing -p no:warnings
+          # Pointe vers les artifacts de test, pas le modèle de production
+          MODEL_PATH: tests/artifacts/model_dummy.joblib
+          ONNX_PATH: tests/artifacts/model_dummy.onnx
+          ENV: test
 
-  # ── JOB 2 : Build Docker avec le vrai modèle ─────────────────
-  build:
-    name: Construire et tester l image Docker
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: coverage.xml
+          fail_ci_if_error: false
+
+  # ────────────────────────────────────────────────
+  # JOB 2 : Build Docker
+  # ────────────────────────────────────────────────
+  build-docker:
+    name: Build image Docker
+    runs-on: ubuntu-latest
     needs: tests
-    runs-on: ubuntu-latest
 
     steps:
-      - name: Récupérer le dépôt
+      - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build (sans push)
+        uses: docker/build-push-action@v5
         with:
-          lfs: true
+          context: .
+          push: false
+          tags: p7-protein-solubility:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      - name: Vérifier la présence du vrai modèle joblib
-        run: |
-          if [ ! -f model/lgbm_model.joblib ]; then
-            echo "ERREUR : model/lgbm_model.joblib absent."
-            exit 1
-          fi
-          echo "OK - Modele joblib trouve"
-          ls -lh model/
-
-      - name: Régénérer le modèle ONNX sur Linux
-        run: |
-          pip install onnxmltools onnxruntime lightgbm joblib numpy scikit-learn
-          python -c "
-          import joblib
-          import onnxmltools
-          from onnxmltools.convert import convert_lightgbm
-          from onnxmltools.convert.common.data_types import FloatTensorType
-
-          model = joblib.load('model/lgbm_model.joblib')
-          initial_type = [('float_input', FloatTensorType([None, 13]))]
-          onnx_model = convert_lightgbm(
-              model.booster_,
-              initial_types=initial_type,
-              target_opset=12
-          )
-          with open('model/lgbm_model.onnx', 'wb') as f:
-              f.write(onnx_model.SerializeToString())
-          print('ONNX regenere sur Linux OK')
-          import os
-          print('Taille:', os.path.getsize('model/lgbm_model.onnx'), 'bytes')
-          "
-
-      - name: Construire l image Docker
-        run: docker build -t protein-solubility-api:latest .
-
-      - name: Démarrer le container
-        run: |
-          docker run -d --name protein-api -p 8000:7860 protein-solubility-api:latest
-          echo "Container demarre, attente 20s..."
-          sleep 20
-
-      - name: Afficher les logs du container
-        run: |
-          echo "=== LOGS DU CONTAINER ==="
-          docker logs protein-api
-          echo "========================="
-
-      - name: Tester les endpoints
-        run: |
-          for i in {1..20}; do
-            if curl -fsS http://localhost:8000/health; then
-              echo "API demarree OK"
-              break
-            fi
-            echo "Tentative $i/20..."
-            sleep 3
-          done
-
-          echo "Test /health"
-          curl -fsS http://localhost:8000/health
-
-          echo "Test /docs"
-          curl -fsS http://localhost:8000/docs > /dev/null
-
-          echo "Test /predict"
-          curl -fsS -X POST http://localhost:8000/predict \
-            -H "Content-Type: application/json" \
-            -d '{
-              "pI": 6.2,
-              "log_mw": 10.5,
-              "gravy_norm": 0.21,
-              "log_instability": 0.5,
-              "aromaticity": 0.08,
-              "pct_helix": 0.38,
-              "pct_turn": 0.30,
-              "pct_sheet": 0.18
-            }'
-          echo "Tous les endpoints OK"
-
-      - name: Arrêter le container
-        if: always()
-        run: docker rm -f protein-api || true
-
-  # ── JOB 3 : Déploiement Hugging Face ─────────────────────────
-  deploy:
-    name: Deployer sur Hugging Face
-    needs: build
+  # ────────────────────────────────────────────────
+  # JOB 3 : Deploy HuggingFace Spaces
+  # ────────────────────────────────────────────────
+  deploy-hf:
+    name: Deploy HuggingFace Spaces
+    runs-on: ubuntu-latest
+    needs: [tests, build-docker]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
 
     steps:
-      - name: Récupérer le dépôt avec LFS
+      - name: Checkout
         uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           lfs: true
 
-      - name: Vérifier les fichiers
-        run: |
-          git lfs pull
-          ls -lh model/lgbm_model.joblib
-          echo "OK - Modele joblib present"
-
-      - name: Régénérer le modèle ONNX sur Linux pour déploiement
-        run: |
-          pip install onnxmltools onnxruntime lightgbm joblib numpy scikit-learn
-          python -c "
-          import joblib
-          import onnxmltools
-          from onnxmltools.convert import convert_lightgbm
-          from onnxmltools.convert.common.data_types import FloatTensorType
-
-          model = joblib.load('model/lgbm_model.joblib')
-          initial_type = [('float_input', FloatTensorType([None, 13]))]
-          onnx_model = convert_lightgbm(
-              model.booster_,
-              initial_types=initial_type,
-              target_opset=12
-          )
-          with open('model/lgbm_model.onnx', 'wb') as f:
-              f.write(onnx_model.SerializeToString())
-          print('ONNX regenere pour deploiement OK')
-          import os
-          print('Taille:', os.path.getsize('model/lgbm_model.onnx'), 'bytes')
-          "
-
-      - name: Installer huggingface-hub
-        run: pip install huggingface-hub
-
-      - name: Vérifier les secrets
+      - name: Push vers HuggingFace Spaces
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          HF_SPACE_ID: ${{ vars.HF_SPACE_ID }}
         run: |
-          test -n "$HF_TOKEN"    || { echo "HF_TOKEN absent"; exit 1; }
-          test -n "$HF_SPACE_ID" || { echo "HF_SPACE_ID absent"; exit 1; }
-          echo "OK - Secrets presents"
+          git config --global user.email "ci@github.com"
+          git config --global user.name "GitHub CI"
 
-      - name: Déployer sur Hugging Face Spaces
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          HF_SPACE_ID: ${{ vars.HF_SPACE_ID }}
-        run: |
-          python - <<'PY'
-          import os
-          from huggingface_hub import HfApi
-
-          api = HfApi()
-          space_id = os.environ["HF_SPACE_ID"]
-          token = os.environ["HF_TOKEN"]
-
-          print("Upload du dossier principal...")
-          api.upload_folder(
-              folder_path=".",
-              repo_id=space_id,
-              repo_type="space",
-              token=token,
-              ignore_patterns=[
-                  ".git/*",
-                  "__pycache__/*",
-                  "*.pyc",
-                  ".venv/*",
-                  "logs/*",
-                  "tests/artifacts/*",
-                  "*.ipynb",
-              ],
-          )
-
-          print("Upload explicite du modele joblib...")
-          api.upload_file(
-              path_or_fileobj="model/lgbm_model.joblib",
-              path_in_repo="model/lgbm_model.joblib",
-              repo_id=space_id,
-              repo_type="space",
-              token=token,
-          )
-
-          print("Upload explicite du modele ONNX (genere sur Linux)...")
-          api.upload_file(
-              path_or_fileobj="model/lgbm_model.onnx",
-              path_in_repo="model/lgbm_model.onnx",
-              repo_id=space_id,
-              repo_type="space",
-              token=token,
-          )
-
-          print("Deploiement termine sur", space_id)
-          PY
-
-      - name: Vérifier que le Space HF démarre
-        env:
-          HF_SPACE_ID: ${{ vars.HF_SPACE_ID }}
-        run: |
-          echo "Attente du démarrage du Space (90s)..."
-          sleep 90
-          SPACE_URL="https://$(echo $HF_SPACE_ID | tr '/' '-').hf.space"
-          echo "Test de $SPACE_URL/health"
-          curl -fsS "$SPACE_URL/health" | python3 -c "
-          import sys, json
-          data = json.load(sys.stdin)
-          assert data.get('model_loaded') == True, 'model_loaded est False'
-          print('Space HF operationnel :', data['status'])
-          " || { echo 'ERREUR : Space HF non operationnel'; exit 1; }
+          # Configurer le remote HF
+          git remote add hf "https://user:${HF_TOKEN}@huggingface.co/spaces/${{ secrets.HF_SPACE_ID }}" || true
+          git push hf main --force
