@@ -1,0 +1,25 @@
+name: Vérifications du moteur métier
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests-sans-gpu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Installer les dépendances des tests
+        run: python -m pip install -r requirements-dev.txt
+      - name: Vérifier la syntaxe Python
+        run: python -m compileall -q app.py length_policy_v7.py workflow_v5.py expert_rules_v6.py protein_advice.py protein_identifier.py finaliser_finetune_v3_securise.py
+      - name: Tests de non-régression (hors GPU et réseau)
+        run: |
+          python test_conseils_v3.py
+          python test_identification_v4.py
+          python test_workflow_v5.py
+          python test_personnalisation_v6.py
+          python test_longueur_v7.py

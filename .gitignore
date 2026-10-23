@@ -1,62 +1,65 @@
-# Python
+# Secrets, credentials, environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*credentials*.json
+*secret*.json
+.secrets/
+.huggingface/
+.cache/
+
+# Model artifacts — kept in a private HF model repository
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+*.joblib
+finetune_best.pt
+finalisation_figee.json
+
+# Raw datasets, experiment caches, large outputs
+*.zip
+*.7z
+*.tar
+*.tar.gz
+*.parquet
+*.arrow
+*.h5
+*.hdf5
+*.fasta
+*.fastq
+*.pkl
+*.pickle
+*.npz
+*.npy
+*.csv
+*.tsv
+cache*/
+outputs/
+artifacts/
+experiments/
+results/
+notebooks/.ipynb_checkpoints/
+
+# Python, environments, tools
 __pycache__/
 *.py[cod]
-*.pyo
-*.pyd
-.Python
-*.egg-info/
-dist/
-build/
-*.egg
 .pytest_cache/
-
-# Environnements virtuels
-.env
-.venv
-env/
+.mypy_cache/
+.ruff_cache/
+.venv/
 venv/
-
-# Jupyter
+*.egg-info/
 .ipynb_checkpoints/
-*.ipynb
 
-# Données sensibles
-*.csv
-*.parquet
-*.pkl
-data/
-
-# Logs de production
-logs/
-
-# Modèle (trop lourd pour Git — utiliser Git LFS ou stocker séparément)
-model/*.joblib
-model/*.pkl
-model/*.onnx
-
-# MLflow
-mlruns/
-mlflow.db
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# OS
+# OS and editors
 .DS_Store
 Thumbs.db
+.vscode/
+.idea/
 
-# Docker
-.dockerignore
-
-# Coverage
-.coverage
-htmlcov/
-coverage.xml
-*.png
-*.zip
-GUIDE_*.md
-retrain_model.py
-Confirmez_vos*/
+# Generated recommendations
+plan_solubilite*.pdf
