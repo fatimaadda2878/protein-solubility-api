@@ -1,0 +1,4 @@
+# Tests métier : sans checkpoint, sans GPU ni réseau externe
+reportlab>=4.2,<5
+biopython>=1.83,<2
+requests>=2.31,<3

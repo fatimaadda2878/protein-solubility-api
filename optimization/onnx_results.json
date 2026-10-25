@@ -1,9 +1,0 @@
-{
-  "original_lgbm": {
-    "mean_ms": 19.307,
-    "std_ms": 4.6795,
-    "per_sample_ms": 0.019307
-  },
-  "onnx_runtime": null,
-  "note": "list indices must be integers or slices, not tuple"
-}
