@@ -63,3 +63,19 @@ Thumbs.db
 
 # Generated recommendations
 plan_solubilite*.pdf
+
+# Anciens composants MLOps conserves hors du depot principal
+/app/
+/model/
+/monitoring/
+/optimization/
+/scripts/
+/Dockerfile
+/run.py
+/server.py
+/generate_onnx.py
+/retrain_model.py
+/data_drift_analysis.ipynb
+/conftest.py
+/pytest.ini
+/tests/*.py

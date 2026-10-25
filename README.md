@@ -1,13 +1,3 @@
----
-title: Solubilité protéique — prédiction et conception expérimentale
-emoji: 🧪
-colorFrom: blue
-colorTo: green
-sdk: gradio
-app_file: app.py
-python_version: 3.10.13
----
-
 # Solubilité protéique — prédiction et conception expérimentale
 
 **Version conservée : V7 expérimentale** · Interface Gradio · ESM-2 150M fine-tuné · identification PDB/UniProt · aide à la conception
@@ -79,19 +69,19 @@ L'application publique tourne sur **Hugging Face Spaces Gradio + ZeroGPU**. Le c
 4. Le dépôt Model privé doit contenir `finetune_best.pt`, `platt_calibrator.joblib`, `finalisation_figee.json` ; leurs empreintes sont vérifiées au démarrage.
 5. Publier les fichiers de ce dépôt à la racine du Space. `requirements.txt` est installé par le service.
 
-Le `README.md` contient le front matter YAML nécessaire au Space (`sdk: gradio`, `app_file: app.py`, couleurs valides). **Ne supprimez pas cette en-tête lors des mises à jour GitHub.**
+Le `README.md` de GitHub ne contient pas le front matter YAML du Space : la configuration Gradio est conservée dans le dépôt Hugging Face, qui reste indépendant.
 
-[Guide détaillé d'installation / déploiement](docs/DEPLOIEMENT.md) · [Commandes Git Bash](docs/MAJ_GITHUB_GITBASH.md).
+[Guide détaillé d'installation / déploiement](docs/DEPLOIEMENT.md) · [Architecture](docs/ARCHITECTURE.md).
 
 ## Exécuter les tests hors GPU
 
 ```bash
 python -m pip install -r requirements-dev.txt
-python test_conseils_v3.py
-python test_identification_v4.py
-python test_workflow_v5.py
-python test_personnalisation_v6.py
-python test_longueur_v7.py
+PYTHONPATH=. python tests/v7/test_conseils_v3.py
+PYTHONPATH=. python tests/v7/test_identification_v4.py
+PYTHONPATH=. python tests/v7/test_workflow_v5.py
+PYTHONPATH=. python tests/v7/test_personnalisation_v6.py
+PYTHONPATH=. python tests/v7/test_longueur_v7.py
 ```
 
 Ces tests utilisent notamment des réponses de services simulées. Ils ne remplacent pas un test de bout en bout sur le Space ZeroGPU avec le checkpoint privé.
@@ -104,7 +94,7 @@ Ces tests utilisent notamment des réponses de services simulées. Ils ne rempla
 - `protein_identifier.py` : PDB, annotation UniProt, vérification d'identité et couverture.
 - `expert_rules_v6.py`, `protein_advice.py` : recommandations biologiques, justifications et PDF.
 - `finaliser_finetune_v3_securise.py` : fonctions Bio13 et architecture nécessaires au chargement du checkpoint ; utilitaire de finalisation historique.
-- `test_*.py` : contrôles de non-régression sans GPU.
+- `tests/v7/test_*.py` : contrôles de non-régression sans GPU.
 - `docs/` : architecture, protocole scientifique, déploiement et étapes Git Bash.
 
 ## Confidentialité et limites
@@ -124,3 +114,7 @@ Le rapport métier et le rapport scientifique détaillés pourront être actuali
 - [UniProt REST API](https://www.uniprot.org/help/api)
 - [ESM / FAIR Protein Language Models](https://github.com/facebookresearch/esm)
 - [Hugging Face Spaces](https://huggingface.co/docs/hub/spaces)
+
+## Historique des architectures
+
+La branche `archive/avant-nettoyage-v7` conserve les anciens composants FastAPI, ONNX, Docker et monitoring. La branche principale presente exclusivement le demonstrateur Gradio V7. Les poids et les donnees restent hors GitHub.
