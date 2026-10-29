@@ -118,3 +118,45 @@ Le rapport métier et le rapport scientifique détaillés pourront être actuali
 ## Historique des architectures
 
 La branche `archive/avant-nettoyage-v7` conserve les anciens composants FastAPI, ONNX, Docker et monitoring. La branche principale presente exclusivement le demonstrateur Gradio V7. Les poids et les donnees restent hors GitHub.
+
+## Évaluation et reproductibilité — V7
+
+Le modèle conservé est ESM-2 150M partiellement
+fine-tuné avec 13 descripteurs biochimiques (Bio13).
+
+### Partitions et protocole
+
+- Fit : apprentissage.
+- Calibration historique : sélection des époques
+  du fine-tuning par arrêt anticipé.
+- Tune : comparaison exploratoire des modèles.
+- Threshold : 2 026 protéines pour le calibrateur
+  Platt et 2 026 pour le choix du seuil.
+
+### Résultats sur DeepSol Tune
+
+- Effectif : 4 052 protéines.
+- AUC ROC historique : 0,832857.
+- PR-AUC historique : 0,786022.
+- Seuil de référence : 0,296491.
+
+Les performances sur Tune sont des résultats de
+développement et non une validation indépendante.
+
+Les exports rétrospectifs utilisent une reconstruction
+numérique des logits à partir des prédictions historiques.
+Les métriques de calibration correspondantes doivent
+être interprétées avec cette limite méthodologique.
+
+### Fichiers de reproductibilité
+
+- Script : scripts/evaluer_predictions_figees.py
+- Résultats : resultats/evaluation_v1/
+- Documentation : docs/NOTE_EVALUATION.md
+- Rapport métier : docs/Rapport_Protein_Solubility_FINAL.pdf
+
+### Perspectives scientifiques
+
+Une validation sur de nouvelles protéines reste
+nécessaire, avec contrôle des homologies et de
+la calibration, notamment entre 513 et 1 022 AA.
