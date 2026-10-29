@@ -1,0 +1,52 @@
+{
+  "model": "esm150_finetune_partiel",
+  "stage": "CALIBRATION/SEUIL INTERNE pour DEMO",
+  "note": "Pas de test independant: ne jamais presenter AUC obtenue ici comme AUC finale externe.",
+  "logits": "Logits du checkpoint V3, non reentrainé",
+  "auc_calibration_inner": 0.8545404706216253,
+  "brier_calibration_inner": 0.14909820711784283,
+  "auc_threshold_inner": 0.8514345432300163,
+  "pr_auc_threshold_inner": 0.7951631883106199,
+  "brier_threshold_inner": 0.15240527417872324,
+  "calibrator_params": {
+    "coef": [
+      [
+        0.7015000853551675
+      ]
+    ],
+    "intercept": [
+      -0.3619155534595947
+    ]
+  },
+  "selection": {
+    "seuil": 0.29649105048292634,
+    "cout_euros": 387600.0,
+    "rappel_soluble": 0.8575,
+    "fn": 114,
+    "fp": 418,
+    "n": 2026,
+    "min_recall": 0.4,
+    "fn_cost": 1200.0,
+    "fp_cost": 600.0
+  },
+  "confusion_threshold": {
+    "TN": 808,
+    "FP": 418,
+    "FN": 114,
+    "TP": 686
+  },
+  "homology_split": {
+    "components": 3630,
+    "hits": 5083,
+    "max_component": 12,
+    "n_calibration_nouvelle": 2026,
+    "n_seuil_nouveau": 2026,
+    "homologie": "MMseqs recherche approchee, id>=0.25, couverture>=0.7, max 300 hits; pas de preuve exhaustive"
+  },
+  "N_calibration_new": 2026,
+  "N_threshold_new": 2026,
+  "historical_tune_auc": 0.832857,
+  "historical_holdout_ft": "Non evalue",
+  "protocol_warning": "Calibration historique consommee pour early stopping du FT V3; Threshold divise en moities.",
+  "no_reuse_holdout": true
+}
