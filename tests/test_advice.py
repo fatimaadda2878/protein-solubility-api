@@ -1,6 +1,6 @@
 """Tests rapides métier, sans charger le checkpoint ESM-2."""
 from pathlib import Path
-from protein_advice import make_guide, generate_recommendation, clean_sequence
+from solubility.protein_advice import make_guide, generate_recommendation, clean_sequence
 
 GFP = ('MSKGEELFTGVVPILVELDGDVNGHKFSVSGEGEGDATYGKLTLKFICTTGKLPVPWPTLVTTFSYGVQCFSRYPDHMKQHDFFKSAMPEGYVQERTIFFKDDGNYKTRAEVKFEGDTLVNRIELKGIDFKEDGNILGHKLEYNYNSHNVYIMADKQKNGIKVNFKIRHNIEDGSVQLADHYQQNTPIGDGPVLLPDNHYLSTQSALSKDPNEKRDHMVLLEFVTAAGITHGMDELYK')
 assert len(GFP)==238

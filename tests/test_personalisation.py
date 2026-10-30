@@ -1,9 +1,9 @@
 """Tests hors réseau et hors GPU : plans spécifiques, provenance des annotations, PDF."""
 from pathlib import Path
 from unittest.mock import patch
-from protein_identifier import infer_family, uniprot_annotations, identify_sequence
-from protein_advice import make_guide, generate_recommendation, to_markdown
-from test_conseils_v3 import GFP, STATE
+from solubility.protein_identifier import infer_family, uniprot_annotations, identify_sequence
+from solubility.protein_advice import make_guide, generate_recommendation, to_markdown
+from test_advice import GFP, STATE
 
 TRXA = 'MSDKIIHLTDDSFDTDVLKADGAILVDFWAEWCGPCKMIAPILDEIADEYQGKLTVAKLNIDQNPGTAPKYGIRGIPTLLLFKNGEVAATKVGALSKGQLKEFLDANLA'
 UBQ = 'MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG'
@@ -32,7 +32,7 @@ def match(seq, name,uniprot):
                              'rcsb_polymer_entity_container_identifiers':{
                                  'reference_sequence_identifiers':[{'database_name':'UniProt','database_accession':'P0AA25'}]}})
         return Response(uniprot)
-    with patch('protein_identifier.requests.post',side_effect=post), patch('protein_identifier.requests.get',side_effect=get):
+    with patch('solubility.protein_identifier.requests.post',side_effect=post), patch('solubility.protein_identifier.requests.get',side_effect=get):
         return identify_sequence(seq)
 
 def run():

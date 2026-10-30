@@ -13,7 +13,7 @@
 | Holdout historique | 4 052 | Déjà consulté dans d'autres expériences ; ne pas l’annoncer comme test final de cette version. |
 | Nouvelle cohorte | À déterminer | Collecte future, non encore réalisée. |
 
-La logique est directement cohérente avec les scripts originaux `derniere_campagne_esm2_v3.py` (early stopping) et `finaliser_finetune_v3_securise.py` (split de Threshold, Platt, seuil économique).
+La logique est directement cohérente avec les scripts originaux `derniere_campagne_esm2_v3.py` (early stopping) et `finaliser_finetune_v3_securise.py`, aujourd'hui `solubility/finetune.py` (split de Threshold, Platt, seuil économique).
 
 ## 2. État des résultats documentés
 

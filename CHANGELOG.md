@@ -1,5 +1,11 @@
 # Journal des évolutions
 
+## Réorganisation du code (2026-10)
+
+- Modules regroupés dans le package `solubility/` avec des noms stables (`workflow.py`, `expert_rules.py`, `length_policy.py`, `finetune.py`) ; les numéros de version restent tracés dans ce journal et dans l'historique Git.
+- Tests renommés et regroupés dans `tests/`.
+- Aucun changement fonctionnel : mêmes poids, calibrateur, seuil et règles.
+
 ## V7 — version conservée (2026-10)
 
 - Inférence adaptative : ≤512 AA sous le protocole historique, 513–1 022 AA sous une extension expérimentale, >1 022 AA retour aux 512 premiers AA.

@@ -19,11 +19,11 @@ jobs:
         run: python -m pip install -r requirements-dev.txt
       - name: Syntaxe Python
         run: |
-          python -m compileall -q app.py workflow_v5.py length_policy_v7.py expert_rules_v6.py protein_advice.py protein_identifier.py finaliser_finetune_v3_securise.py tests/v7
+          python -m compileall -q app.py solubility tests
       - name: Tests hors GPU et hors reseau
         run: |
-          python tests/v7/test_conseils_v3.py
-          python tests/v7/test_identification_v4.py
-          python tests/v7/test_workflow_v5.py
-          python tests/v7/test_personnalisation_v6.py
-          python tests/v7/test_longueur_v7.py
+          python tests/test_advice.py
+          python tests/test_identification.py
+          python tests/test_workflow.py
+          python tests/test_personalisation.py
+          python tests/test_length_policy.py

@@ -1,10 +1,10 @@
 """Tests V5 hors réseau, hors checkpoint et hors GPU."""
 from pathlib import Path
 from unittest.mock import patch
-from test_conseils_v3 import GFP, STATE
-from test_identification_v4 import fake_post, fake_get
-from protein_advice import clean_sequence, make_guide
-from workflow_v5 import identify_safe, identity_html, score_html, plan_auto
+from test_advice import GFP, STATE
+from test_identification import fake_post, fake_get
+from solubility.protein_advice import clean_sequence, make_guide
+from solubility.workflow import identify_safe, identity_html, score_html, plan_auto
 
 
 def run():
@@ -14,10 +14,10 @@ def run():
         except ValueError: pass
         else: raise AssertionError('Caractère invalide accepté : '+bad[:50])
 
-    with patch('protein_identifier.requests.post', side_effect=fake_post), \
-         patch('protein_identifier.requests.get', side_effect=fake_get):
+    with patch('solubility.protein_identifier.requests.post', side_effect=fake_post), \
+         patch('solubility.protein_identifier.requests.get', side_effect=fake_get):
         # injecter l'outil réel car valeur par défaut liée à la fonction d'origine
-        from protein_identifier import identify_sequence
+        from solubility.protein_identifier import identify_sequence
         ident=identify_safe(GFP, search_fn=identify_sequence)
     assert ident['auto_family']=='GFP / protéine fluorescente'
     html=identity_html(ident)
@@ -36,8 +36,8 @@ def run():
     score_low=score_html(0.1,0.29,600)
     assert 'Insoluble' in score_low and '512' in score_low
 
-    with patch('protein_identifier.requests.post', side_effect=ConnectionError('réseau inaccessible')):
-        from protein_identifier import identify_sequence
+    with patch('solubility.protein_identifier.requests.post', side_effect=ConnectionError('réseau inaccessible')):
+        from solubility.protein_identifier import identify_sequence
         ident_error=identify_safe(GFP, search_fn=identify_sequence)
     assert ident_error['status']=='erreur'
     md2,pdf2,details2=plan_auto(GFP,STATE,ident_error)

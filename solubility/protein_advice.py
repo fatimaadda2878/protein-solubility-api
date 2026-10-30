@@ -13,7 +13,7 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
-from expert_rules_v6 import decide
+from solubility.expert_rules import decide
 
 AA = set("ACDEFGHIKLMNPQRSTVWY")
 KD = {"A":1.8,"C":2.5,"D":-3.5,"E":-3.5,"F":2.8,"G":-0.4,"H":-3.2,

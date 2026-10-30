@@ -9,7 +9,7 @@ Ce protocole utilise deux moities de Threshold : impossible de pretendre avoir
 une evaluation finale independante sur Threshold entier. Pas de Holdout ici.
 
 Colab:
- python -u finaliser_finetune_v3_securise.py --zip /content/P7_ESM2_colab_inputs.zip \
+ python -u -m solubility.finetune --zip /content/P7_ESM2_colab_inputs.zip \
   --campaign /content/drive/MyDrive/P7_ESM2/campagne_finale_v3 \
   --out /content/drive/MyDrive/P7_ESM2/finalisation_finetune_v3
 """

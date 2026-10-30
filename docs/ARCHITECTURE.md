@@ -26,13 +26,13 @@ flowchart TD
 | Fichier | Rôle |
 |---|---|
 | `app.py` | Chargement sécurisé du checkpoint, ZeroGPU, interface, orchestration |
-| `finaliser_finetune_v3_securise.py` | Fonctions historiques `bio13` et architecture du réseau, nécessaires pour restaurer le checkpoint |
-| `length_policy_v7.py` | Politique de longueur 512 / 1 022 / repli 512 |
-| `workflow_v5.py` | Lien entre le score, l'identification et le plan |
-| `protein_identifier.py` | Appels publics PDB/UniProt, alignements, vérification des annotations |
-| `expert_rules_v6.py` | Règles de priorisation des essais biochimiques |
-| `protein_advice.py` | Présentation des recommandations, caractéristiques de séquence, PDF |
-| `test_*.py` | Tests hors GPU / simulés |
+| `solubility/finetune.py` | Fonctions historiques `bio13` et architecture du réseau, nécessaires pour restaurer le checkpoint |
+| `solubility/length_policy.py` | Politique de longueur 512 / 1 022 / repli 512 |
+| `solubility/workflow.py` | Lien entre le score, l'identification et le plan |
+| `solubility/protein_identifier.py` | Appels publics PDB/UniProt, alignements, vérification des annotations |
+| `solubility/expert_rules.py` | Règles de priorisation des essais biochimiques |
+| `solubility/protein_advice.py` | Présentation des recommandations, caractéristiques de séquence, PDF |
+| `tests/test_*.py` | Tests hors GPU / simulés |
 
 ## Fichiers modèle non versionnés sur GitHub
 

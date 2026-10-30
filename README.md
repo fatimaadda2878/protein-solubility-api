@@ -67,7 +67,7 @@ L'application publique tourne sur **Hugging Face Spaces Gradio + ZeroGPU**. Le c
 2. Définir la variable `HF_MODEL_REPO` avec l'identifiant du dépôt Model (format `compte/depot`).
 3. Définir le secret `HF_TOKEN` avec un token ayant les droits **lecture** sur ce dépôt privé. Ne jamais committer de token.
 4. Le dépôt Model privé doit contenir `finetune_best.pt`, `platt_calibrator.joblib`, `finalisation_figee.json` ; leurs empreintes sont vérifiées au démarrage.
-5. Publier les fichiers de ce dépôt à la racine du Space. `requirements.txt` est installé par le service.
+5. Publier les fichiers de ce dépôt à la racine du Space (`app.py`, le dossier `solubility/` et `requirements.txt`). `requirements.txt` est installé par le service.
 
 Le `README.md` de GitHub ne contient pas le front matter YAML du Space : la configuration Gradio est conservée dans le dépôt Hugging Face, qui reste indépendant.
 
@@ -77,24 +77,25 @@ Le `README.md` de GitHub ne contient pas le front matter YAML du Space : la conf
 
 ```bash
 python -m pip install -r requirements-dev.txt
-PYTHONPATH=. python tests/v7/test_conseils_v3.py
-PYTHONPATH=. python tests/v7/test_identification_v4.py
-PYTHONPATH=. python tests/v7/test_workflow_v5.py
-PYTHONPATH=. python tests/v7/test_personnalisation_v6.py
-PYTHONPATH=. python tests/v7/test_longueur_v7.py
+PYTHONPATH=. python tests/test_advice.py
+PYTHONPATH=. python tests/test_identification.py
+PYTHONPATH=. python tests/test_workflow.py
+PYTHONPATH=. python tests/test_personalisation.py
+PYTHONPATH=. python tests/test_length_policy.py
 ```
 
 Ces tests utilisent notamment des réponses de services simulées. Ils ne remplacent pas un test de bout en bout sur le Space ZeroGPU avec le checkpoint privé.
 
 ## Organisation du dépôt
 
-- `app.py` : Gradio / modèle / pipeline de prédiction / sécurité des poids.
-- `length_policy_v7.py` : fenêtre d'inférence adaptative et avertissements.
-- `workflow_v5.py` : liaison du résultat ML à l'identification et aux recommandations.
-- `protein_identifier.py` : PDB, annotation UniProt, vérification d'identité et couverture.
-- `expert_rules_v6.py`, `protein_advice.py` : recommandations biologiques, justifications et PDF.
-- `finaliser_finetune_v3_securise.py` : fonctions Bio13 et architecture nécessaires au chargement du checkpoint ; utilitaire de finalisation historique.
-- `tests/v7/test_*.py` : contrôles de non-régression sans GPU.
+- `app.py` : Gradio / modèle / pipeline de prédiction / sécurité des poids (point d'entrée du Space).
+- `solubility/` : moteur de l'application.
+  - `length_policy.py` : fenêtre d'inférence adaptative et avertissements.
+  - `workflow.py` : liaison du résultat ML à l'identification et aux recommandations.
+  - `protein_identifier.py` : PDB, annotation UniProt, vérification d'identité et couverture.
+  - `expert_rules.py`, `protein_advice.py` : recommandations biologiques, justifications et PDF.
+  - `finetune.py` : fonctions Bio13 et architecture nécessaires au chargement du checkpoint ; utilitaire de finalisation historique.
+- `tests/test_*.py` : contrôles de non-régression sans GPU.
 - `docs/` : architecture, protocole scientifique, déploiement et étapes Git Bash.
 
 ## Confidentialité et limites

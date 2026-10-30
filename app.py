@@ -20,12 +20,12 @@ import joblib
 import esm
 from huggingface_hub import hf_hub_download
 
-from finaliser_finetune_v3_securise import (
+from solubility.finetune import (
     AA, BIONAMES, bio13, create_net, sha_file
 )
-from protein_advice import clean_sequence
-from workflow_v5 import identify_safe, identity_html, score_html, plan_auto
-from length_policy_v7 import policy_for_length
+from solubility.protein_advice import clean_sequence
+from solubility.workflow import identify_safe, identity_html, score_html, plan_auto
+from solubility.length_policy import policy_for_length
 
 CACHE_DIR = Path('/tmp/esm2_finetune_artifacts')
 ARTIFACTS = ('finetune_best.pt', 'platt_calibrator.joblib', 'finalisation_figee.json')

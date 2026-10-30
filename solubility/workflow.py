@@ -9,8 +9,8 @@ import html
 import re
 import hashlib
 
-from protein_advice import clean_sequence, generate_recommendation
-from protein_identifier import identify_sequence, to_markdown
+from solubility.protein_advice import clean_sequence, generate_recommendation
+from solubility.protein_identifier import identify_sequence, to_markdown
 
 
 def cleaned(seq: str) -> str:

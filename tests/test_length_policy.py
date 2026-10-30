@@ -1,8 +1,8 @@
 """Tests V7 hors réseau et hors GPU, y compris cohérence du PDF."""
 from pathlib import Path
-from length_policy_v7 import policy_for_length
-from workflow_v5 import score_html
-from protein_advice import make_guide, generate_recommendation
+from solubility.length_policy import policy_for_length
+from solubility.workflow import score_html
+from solubility.protein_advice import make_guide, generate_recommendation
 
 THRESHOLD = 0.29649105048292634
 SEQ600 = 'ACDEFGHIKLMNPQRSTVWY' * 30
